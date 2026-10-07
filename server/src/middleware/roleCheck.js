@@ -1,12 +1,4 @@
-const VALID_ROLES = [
-  'super_admin',
-  'team_lead',
-  'marketing_manager',
-  'seo_executive',
-  'content_writer',
-  'developer',
-  'client',
-]
+const { ADMIN_ROLES, MANAGEMENT_ROLES } = require('../config/constants')
 
 const requireRoles = (...allowedRoles) => (req, res, next) => {
   if (!req.user) {
@@ -20,9 +12,8 @@ const requireRoles = (...allowedRoles) => (req, res, next) => {
   next()
 }
 
-// Convenience role groups
-const ADMIN_ROLES        = ['super_admin', 'team_lead']
-const MANAGEMENT_ROLES   = ['super_admin', 'team_lead', 'marketing_manager']
-const ALL_STAFF_ROLES    = VALID_ROLES.filter((r) => r !== 'client')
+const isAdmin      = (user) => ADMIN_ROLES.includes(user.role)
+// Admins and marketing managers can see / manage every task
+const canManageAll = (user) => MANAGEMENT_ROLES.includes(user.role)
 
-module.exports = { requireRoles, ADMIN_ROLES, MANAGEMENT_ROLES, ALL_STAFF_ROLES, VALID_ROLES }
+module.exports = { requireRoles, isAdmin, canManageAll }

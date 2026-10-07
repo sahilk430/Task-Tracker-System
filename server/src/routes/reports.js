@@ -1,89 +1,108 @@
 const express = require('express')
-const { PrismaClient } = require('@prisma/client')
+const { Task, Website, Project } = require('../models')
 const { authenticate } = require('../middleware/auth')
-const { requireRoles, ADMIN_ROLES } = require('../middleware/roleCheck')
+const { requireRoles } = require('../middleware/roleCheck')
+const { MANAGEMENT_ROLES, CLOSED_TASK_STATUSES } = require('../config/constants')
+const { countBy } = require('../utils/countBy')
 
 const router = express.Router()
-const prisma  = new PrismaClient()
+const canViewReports = requireRoles(...MANAGEMENT_ROLES)
 
-const reportTaskSelect = {
-  id: true, title: true, category: true, status: true, priority: true,
-  dueDate: true, startDate: true, createdAt: true, updatedAt: true,
-  estimatedHours: true, actualHours: true,
-  targetUrl: true, targetKeywords: true, searchIntent: true,
-  currentRanking: true, targetRanking: true,
-  expectedResult: true, actualResult: true,
-  gscImpressionsBefore: true, gscImpressionsAfter: true,
-  gscClicksBefore: true, gscClicksAfter: true,
-  backlinksCount: true, toolsUsed: true, tags: true,
-  website:  { select: { id: true, name: true, domain: true } },
-  project:  { select: { id: true, name: true } },
-  assignee: { select: { id: true, name: true, role: true } },
-  creator:  { select: { id: true, name: true } },
+const DATE_FILTER_FIELDS = ['createdAt', 'dueDate', 'updatedAt']
+
+const POPULATE = [
+  { path: 'website',  select: 'name domain' },
+  { path: 'project',  select: 'name' },
+  { path: 'assignee', select: 'name role' },
+  { path: 'creator',  select: 'name' },
+]
+
+const isOverdue = (task, now) =>
+  task.dueDate && task.dueDate < now && !CLOSED_TASK_STATUSES.includes(task.status)
+
+const countStatus = (tasks, status) => tasks.filter((t) => t.status === status).length
+const sum = (tasks, field) => tasks.reduce((total, t) => total + (t[field] || 0), 0)
+
+// Task.filterFromQuery + an optional date range on one of DATE_FILTER_FIELDS
+function buildReportFilter(query) {
+  const filter = Task.filterFromQuery(query)
+  const { dateFrom, dateTo, dateField } = query
+
+  if (dateFrom || dateTo) {
+    const field = DATE_FILTER_FIELDS.includes(dateField) ? dateField : 'createdAt'
+    filter[field] = {}
+    if (dateFrom) filter[field].$gte = new Date(dateFrom)
+    if (dateTo)   filter[field].$lte = new Date(`${dateTo}T23:59:59Z`)
+  }
+  return filter
+}
+
+// 1 when `cond` holds, else 0 — for $sum inside $group
+const countIf = (cond) => ({ $sum: { $cond: [cond, 1, 0] } })
+
+// Per-website task totals, computed in the database: { [websiteId]: { total, done, inProgress, overdue } }
+async function taskStatsByWebsite(ids, now) {
+  const groups = await Task.aggregate([
+    { $match: { website: { $in: ids } } },
+    { $group: {
+      _id:        '$website',
+      total:      { $sum: 1 },
+      done:       countIf({ $eq: ['$status', 'done'] }),
+      inProgress: countIf({ $eq: ['$status', 'in_progress'] }),
+      overdue:    countIf({ $and: [
+        { $eq: [{ $type: '$dueDate' }, 'date'] },
+        { $lt: ['$dueDate', now] },
+        { $not: [{ $in: ['$status', CLOSED_TASK_STATUSES] }] },
+      ] }),
+    } },
+  ])
+  return Object.fromEntries(groups.map(({ _id, ...stats }) => [_id.toString(), stats]))
 }
 
 // GET /api/reports/tasks
-router.get('/tasks', authenticate, requireRoles(...ADMIN_ROLES, 'marketing_manager'), async (req, res) => {
-  try {
-    const { websiteId, projectId, status, priority, category, assignedTo, dateFrom, dateTo, dateField = 'createdAt' } = req.query
+router.get('/tasks', authenticate, canViewReports, async (req, res) => {
+  const tasks = await Task.find(buildReportFilter(req.query))
+    .select('-description')
+    .populate(POPULATE)
+    .sort({ createdAt: -1 })
 
-    const where = {}
-    if (websiteId)  where.websiteId  = websiteId
-    if (projectId)  where.projectId  = projectId
-    if (status)     where.status     = status
-    if (priority)   where.priority   = priority
-    if (category)   where.category   = category
-    if (assignedTo) where.assignedTo = assignedTo
+  const now = new Date()
+  const summary = {
+    total:               tasks.length,
+    done:                countStatus(tasks, 'done'),
+    inProgress:          countStatus(tasks, 'in_progress'),
+    inReview:            countStatus(tasks, 'in_review'),
+    overdue:             tasks.filter((t) => isOverdue(t, now)).length,
+    totalEstimatedHours: sum(tasks, 'estimatedHours'),
+    totalActualHours:    sum(tasks, 'actualHours'),
+  }
 
-    if (dateFrom || dateTo) {
-      const field = ['createdAt', 'dueDate', 'updatedAt'].includes(dateField) ? dateField : 'createdAt'
-      where[field] = {}
-      if (dateFrom) where[field].gte = new Date(dateFrom)
-      if (dateTo)   where[field].lte = new Date(dateTo + 'T23:59:59Z')
-    }
-
-    const tasks = await prisma.task.findMany({ where, select: reportTaskSelect, orderBy: { createdAt: 'desc' } })
-
-    const now = new Date()
-    const summary = {
-      total:               tasks.length,
-      done:                tasks.filter((t) => t.status === 'done').length,
-      inProgress:          tasks.filter((t) => t.status === 'in_progress').length,
-      inReview:            tasks.filter((t) => t.status === 'in_review').length,
-      overdue:             tasks.filter((t) => t.dueDate && new Date(t.dueDate) < now && !['done','cancelled'].includes(t.status)).length,
-      totalEstimatedHours: tasks.reduce((s, t) => s + (t.estimatedHours || 0), 0),
-      totalActualHours:    tasks.reduce((s, t) => s + (t.actualHours    || 0), 0),
-    }
-
-    res.json({ tasks, summary })
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Server error.' }) }
+  res.json({ tasks, summary })
 })
 
 // GET /api/reports/websites
-router.get('/websites', authenticate, requireRoles(...ADMIN_ROLES, 'marketing_manager'), async (req, res) => {
-  try {
-    const websites = await prisma.website.findMany({
-      where: { status: { not: 'archived' } },
-      select: {
-        id: true, name: true, domain: true, status: true,
-        _count: { select: { tasks: true, projects: true } },
-        tasks: { select: { status: true, dueDate: true } },
-      },
-      orderBy: { name: 'asc' },
-    })
+router.get('/websites', authenticate, canViewReports, async (req, res) => {
+  const websites = await Website.find({ status: { $ne: 'archived' } }).select('name domain status').sort({ name: 1 })
+  const ids = websites.map((w) => w._id)
 
-    const now = new Date()
-    const result = websites.map((w) => ({
+  const [taskStats, projectCounts] = await Promise.all([
+    taskStatsByWebsite(ids, new Date()),
+    countBy(Project, 'website', ids),
+  ])
+
+  const result = websites.map((w) => {
+    const stats = taskStats[w.id] || { total: 0, done: 0, inProgress: 0, overdue: 0 }
+    return {
       id: w.id, name: w.name, domain: w.domain, status: w.status,
-      totalTasks:    w._count.tasks,
-      totalProjects: w._count.projects,
-      done:       w.tasks.filter((t) => t.status === 'done').length,
-      inProgress: w.tasks.filter((t) => t.status === 'in_progress').length,
-      overdue:    w.tasks.filter((t) => t.dueDate && new Date(t.dueDate) < now && !['done','cancelled'].includes(t.status)).length,
-    }))
+      totalTasks:    stats.total,
+      totalProjects: projectCounts[w.id] || 0,
+      done:          stats.done,
+      inProgress:    stats.inProgress,
+      overdue:       stats.overdue,
+    }
+  })
 
-    res.json({ websites: result })
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Server error.' }) }
+  res.json({ websites: result })
 })
 
 module.exports = router
