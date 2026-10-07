@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, Users, Globe, CheckSquare, BarChart2 } from 'lucide-react'
-import useAuthStore from '../store/authStore'
-import { ROLE_LABELS, ROLE_BADGE_COLORS, ADMIN_ROLES } from '../utils/constants'
+import { useUser } from '../../hooks/useAuth'
+import { ROLE_LABELS, ROLE_BADGE_COLORS, ADMIN_ROLES } from '../../utils/constants'
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: 'all' },
@@ -12,7 +12,7 @@ const navItems = [
 ]
 
 export default function Sidebar() {
-  const user = useAuthStore((s) => s.user)
+  const user = useUser()
 
   const visibleItems = navItems.filter((item) =>
     item.roles === 'all' || item.roles.includes(user?.role)

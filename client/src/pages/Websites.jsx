@@ -1,37 +1,30 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Globe, ExternalLink, Edit2, Archive, X } from 'lucide-react'
-import { getWebsites, createWebsite, updateWebsite, archiveWebsite } from '../api/websites'
-import useAuthStore from '../store/authStore'
-import { ADMIN_ROLES } from '../utils/constants'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Plus, Globe, ExternalLink, Edit2, Archive } from 'lucide-react'
+import { createWebsite, updateWebsite, archiveWebsite } from '../api/websites'
+import { useWebsites } from '../hooks/queries'
+import { useUser } from '../hooks/useAuth'
+import Modal from '../components/ui/Modal'
+import FormError from '../components/ui/FormError'
+import { ADMIN_ROLES, WEBSITE_STATUS_BADGE } from '../utils/constants'
 
 const CMS_OPTIONS = ['WordPress','Shopify','Webflow','Wix','Squarespace','Custom','Other']
-const STATUS_BADGE = {
-  active:    'bg-green-100 text-green-700',
-  paused:    'bg-yellow-100 text-yellow-700',
-  completed: 'bg-blue-100 text-blue-700',
-  archived:  'bg-gray-100 text-gray-500',
-}
 const EMPTY = { name:'', domain:'', cmsPlatform:'', industry:'', ga4PropertyId:'', gscProperty:'', clientName:'', clientEmail:'', notes:'', status:'active' }
 
 export default function Websites() {
-  const user    = useAuthStore((s) => s.user)
+  const user    = useUser()
   const isAdmin = ADMIN_ROLES.includes(user?.role)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
-  const [websites, setWebsites]   = useState([])
-  const [loading, setLoading]     = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing]     = useState(null)
   const [form, setForm]           = useState(EMPTY)
-  const [saving, setSaving]       = useState(false)
   const [formError, setFormError] = useState('')
 
-  const fetchWebsites = () => {
-    setLoading(true)
-    getWebsites().then(({ data }) => setWebsites(data.websites)).catch(() => {}).finally(() => setLoading(false))
-  }
-  useEffect(() => { fetchWebsites() }, [])
+  const { data: websites = [], isPending: loading } = useWebsites()
+  const invalidateWebsites = () => queryClient.invalidateQueries({ queryKey: ['websites'] })
 
   const openAdd  = () => { setEditing(null); setForm(EMPTY); setFormError(''); setShowModal(true) }
   const openEdit = (w) => {
@@ -43,19 +36,24 @@ export default function Websites() {
   }
   const closeModal = () => { setShowModal(false); setEditing(null); setFormError('') }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault(); setSaving(true); setFormError('')
-    try {
-      editing ? await updateWebsite(editing.id, form) : await createWebsite(form)
-      closeModal(); fetchWebsites()
-    } catch (err) { setFormError(err.response?.data?.message || 'Something went wrong.') }
-    finally { setSaving(false) }
-  }
+  const saveWebsite = useMutation({
+    mutationFn: () => editing ? updateWebsite(editing.id, form) : createWebsite(form),
+    onSuccess:  () => { closeModal(); invalidateWebsites() },
+    onError:    (err) => setFormError(err.response?.data?.message || 'Something went wrong.'),
+  })
+  const saving = saveWebsite.isPending
 
-  const handleArchive = async (w, e) => {
+  const archive = useMutation({
+    mutationFn: (w) => archiveWebsite(w.id),
+    onSuccess:  invalidateWebsites,
+  })
+
+  const handleSubmit = (e) => { e.preventDefault(); setFormError(''); saveWebsite.mutate() }
+
+  const handleArchive = (w, e) => {
     e.stopPropagation()
     if (!confirm(`Archive "${w.name}"?`)) return
-    try { await archiveWebsite(w.id); fetchWebsites() } catch {}
+    archive.mutate(w)
   }
 
   const f = (key) => (e) => setForm(p => ({ ...p, [key]: e.target.value }))
@@ -100,7 +98,7 @@ export default function Websites() {
                     </a>
                   </div>
                 </div>
-                <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${STATUS_BADGE[w.status] || STATUS_BADGE.active}`}>
+                <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${WEBSITE_STATUS_BADGE[w.status] || WEBSITE_STATUS_BADGE.active}`}>
                   {w.status.charAt(0).toUpperCase() + w.status.slice(1)}
                 </span>
               </div>
@@ -127,72 +125,66 @@ export default function Websites() {
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 sticky top-0 bg-white z-10">
-              <h2 className="font-semibold text-gray-900">{editing ? 'Edit Website' : 'Add New Website'}</h2>
-              <button onClick={closeModal} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-4 h-4 text-gray-500" /></button>
-            </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {formError && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{formError}</div>}
-              <div className="grid grid-cols-2 gap-4">
+        <Modal title={editing ? 'Edit Website' : 'Add New Website'} onClose={closeModal} size="lg">
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <FormError message={formError} />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Website Name *</label>
+                <input type="text" value={form.name} onChange={f('name')} className="input-field" required />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Domain *</label>
+                <input type="text" value={form.domain} onChange={f('domain')} className="input-field" placeholder="example.com" required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">CMS Platform</label>
+                <select value={form.cmsPlatform} onChange={f('cmsPlatform')} className="input-field">
+                  <option value="">Select…</option>
+                  {CMS_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Industry</label>
+                <input type="text" value={form.industry} onChange={f('industry')} className="input-field" placeholder="e.g. E-commerce" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Client Name</label>
+                <input type="text" value={form.clientName} onChange={f('clientName')} className="input-field" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Client Email</label>
+                <input type="email" value={form.clientEmail} onChange={f('clientEmail')} className="input-field" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">GA4 Property ID</label>
+                <input type="text" value={form.ga4PropertyId} onChange={f('ga4PropertyId')} className="input-field" placeholder="G-XXXXXXXXXX" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">GSC Property</label>
+                <input type="text" value={form.gscProperty} onChange={f('gscProperty')} className="input-field" placeholder="sc-domain:example.com" />
+              </div>
+              {editing && (
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Website Name *</label>
-                  <input type="text" value={form.name} onChange={f('name')} className="input-field" required />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Domain *</label>
-                  <input type="text" value={form.domain} onChange={f('domain')} className="input-field" placeholder="example.com" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">CMS Platform</label>
-                  <select value={form.cmsPlatform} onChange={f('cmsPlatform')} className="input-field">
-                    <option value="">Select…</option>
-                    {CMS_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <select value={form.status} onChange={f('status')} className="input-field">
+                    {['active','paused','completed'].map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Industry</label>
-                  <input type="text" value={form.industry} onChange={f('industry')} className="input-field" placeholder="e.g. E-commerce" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Client Name</label>
-                  <input type="text" value={form.clientName} onChange={f('clientName')} className="input-field" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Client Email</label>
-                  <input type="email" value={form.clientEmail} onChange={f('clientEmail')} className="input-field" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">GA4 Property ID</label>
-                  <input type="text" value={form.ga4PropertyId} onChange={f('ga4PropertyId')} className="input-field" placeholder="G-XXXXXXXXXX" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">GSC Property</label>
-                  <input type="text" value={form.gscProperty} onChange={f('gscProperty')} className="input-field" placeholder="sc-domain:example.com" />
-                </div>
-                {editing && (
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                    <select value={form.status} onChange={f('status')} className="input-field">
-                      {['active','paused','completed'].map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
-                    </select>
-                  </div>
-                )}
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                  <textarea value={form.notes} onChange={f('notes')} className="input-field" rows={3} />
-                </div>
+              )}
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                <textarea value={form.notes} onChange={f('notes')} className="input-field" rows={3} />
               </div>
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={closeModal} className="btn-secondary flex-1">Cancel</button>
-                <button type="submit" disabled={saving} className="btn-primary flex-1">
-                  {saving ? 'Saving…' : editing ? 'Update Website' : 'Add Website'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button type="button" onClick={closeModal} className="btn-secondary flex-1">Cancel</button>
+              <button type="submit" disabled={saving} className="btn-primary flex-1">
+                {saving ? 'Saving…' : editing ? 'Update Website' : 'Add Website'}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   )

@@ -1,97 +1,95 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Globe, Users, FolderOpen, Edit2, Trash2, X, UserPlus, UserMinus, ExternalLink } from 'lucide-react'
-import { getWebsite, addWebsiteMember, removeWebsiteMember } from '../api/websites'
-import { getProjects, createProject, deleteProject } from '../api/projects'
-import { getUsers } from '../api/users'
-import useAuthStore from '../store/authStore'
-import { ADMIN_ROLES, STATUS_COLORS, STATUS_LABELS, ROLE_LABELS, ROLE_BADGE_COLORS } from '../utils/constants'
-
-const STATUS_BADGE = {
-  active:    'bg-green-100 text-green-700',
-  paused:    'bg-yellow-100 text-yellow-700',
-  completed: 'bg-blue-100 text-blue-700',
-  archived:  'bg-gray-100 text-gray-500',
-}
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { ArrowLeft, Plus, Globe, Users, FolderOpen, Trash2, UserPlus, UserMinus, ExternalLink } from 'lucide-react'
+import { addWebsiteMember, removeWebsiteMember } from '../api/websites'
+import { createProject, deleteProject } from '../api/projects'
+import { useWebsite, useProjects, useUsers } from '../hooks/queries'
+import { useUser } from '../hooks/useAuth'
+import Modal from '../components/ui/Modal'
+import FormError from '../components/ui/FormError'
+import { ADMIN_ROLES, ROLE_LABELS, ROLE_BADGE_COLORS, WEBSITE_STATUS_BADGE } from '../utils/constants'
 
 const PROJ_EMPTY = { name: '', goal: '', startDate: '', endDate: '', status: 'active' }
 
 export default function WebsiteDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const user = useAuthStore((s) => s.user)
+  const user = useUser()
   const isAdmin = ADMIN_ROLES.includes(user?.role)
+  const queryClient = useQueryClient()
 
-  const [website, setWebsite]       = useState(null)
-  const [projects, setProjects]     = useState([])
-  const [allUsers, setAllUsers]     = useState([])
-  const [loading, setLoading]       = useState(true)
   const [tab, setTab]               = useState('projects')
 
   // Project modal
   const [showProjModal, setShowProjModal] = useState(false)
   const [projForm, setProjForm]           = useState(PROJ_EMPTY)
-  const [projSaving, setProjSaving]       = useState(false)
   const [projError, setProjError]         = useState('')
 
   // Member modal
   const [showMemberModal, setShowMemberModal] = useState(false)
   const [selectedUserId, setSelectedUserId]   = useState('')
-  const [memberSaving, setMemberSaving]       = useState(false)
   const [memberError, setMemberError]         = useState('')
 
-  const fetchAll = async () => {
-    setLoading(true)
-    try {
-      const [wRes, pRes] = await Promise.all([getWebsite(id), getProjects(id)])
-      setWebsite(wRes.data.website)
-      setProjects(pRes.data.projects)
-    } catch {
-      navigate('/websites')
-    } finally {
-      setLoading(false)
-    }
-  }
+  const websiteQuery  = useWebsite(id)
+  const projectsQuery = useProjects(id)
+  const { data: allUsers = [] } = useUsers({}, { enabled: isAdmin && tab === 'members' })
 
-  useEffect(() => { fetchAll() }, [id])
+  const website  = websiteQuery.data
+  const projects = projectsQuery.data ?? []
+  const loading  = websiteQuery.isPending || projectsQuery.isPending
 
   useEffect(() => {
-    if (isAdmin && tab === 'members') {
-      getUsers().then(({ data }) => setAllUsers(data.users)).catch(() => {})
-    }
-  }, [isAdmin, tab])
+    if (websiteQuery.isError || projectsQuery.isError) navigate('/websites')
+  }, [websiteQuery.isError, projectsQuery.isError, navigate])
 
-  // Project handlers
-  const handleAddProject = async (e) => {
-    e.preventDefault(); setProjSaving(true); setProjError('')
-    try {
-      await createProject({ websiteId: id, ...projForm })
-      setShowProjModal(false); setProjForm(PROJ_EMPTY); fetchAll()
-    } catch (err) { setProjError(err.response?.data?.message || 'Something went wrong.') }
-    finally { setProjSaving(false) }
+  const invalidateWebsite  = () => queryClient.invalidateQueries({ queryKey: ['websites'] })
+  const invalidateProjects = () => {
+    queryClient.invalidateQueries({ queryKey: ['projects', id] })
+    invalidateWebsite()
   }
 
-  const handleDeleteProject = async (proj) => {
+  // Project handlers
+  const addProject = useMutation({
+    mutationFn: () => createProject({ websiteId: id, ...projForm }),
+    onSuccess:  () => { setShowProjModal(false); setProjForm(PROJ_EMPTY); invalidateProjects() },
+    onError:    (err) => setProjError(err.response?.data?.message || 'Something went wrong.'),
+  })
+  const projSaving = addProject.isPending
+
+  const removeProject = useMutation({
+    mutationFn: (proj) => deleteProject(proj.id),
+    onSuccess:  invalidateProjects,
+  })
+
+  const handleAddProject = (e) => { e.preventDefault(); setProjError(''); addProject.mutate() }
+
+  const handleDeleteProject = (proj) => {
     if (!confirm(`Delete project "${proj.name}"? This cannot be undone.`)) return
-    try { await deleteProject(proj.id); fetchAll() } catch {}
+    removeProject.mutate(proj)
   }
 
   // Member handlers
   const existingIds = website?.members?.map((m) => m.user.id) || []
   const availableUsers = allUsers.filter((u) => !existingIds.includes(u.id))
 
-  const handleAddMember = async (e) => {
-    e.preventDefault(); setMemberSaving(true); setMemberError('')
-    try {
-      await addWebsiteMember(id, selectedUserId)
-      setShowMemberModal(false); setSelectedUserId(''); fetchAll()
-    } catch (err) { setMemberError(err.response?.data?.message || 'Something went wrong.') }
-    finally { setMemberSaving(false) }
-  }
+  const addMember = useMutation({
+    mutationFn: () => addWebsiteMember(id, selectedUserId),
+    onSuccess:  () => { setShowMemberModal(false); setSelectedUserId(''); invalidateWebsite() },
+    onError:    (err) => setMemberError(err.response?.data?.message || 'Something went wrong.'),
+  })
+  const memberSaving = addMember.isPending
 
-  const handleRemoveMember = async (userId, name) => {
+  const removeMember = useMutation({
+    mutationFn: (userId) => removeWebsiteMember(id, userId),
+    onSuccess:  invalidateWebsite,
+  })
+
+  const handleAddMember = (e) => { e.preventDefault(); setMemberError(''); addMember.mutate() }
+
+  const handleRemoveMember = (userId, name) => {
     if (!confirm(`Remove ${name} from this website?`)) return
-    try { await removeWebsiteMember(id, userId); fetchAll() } catch {}
+    removeMember.mutate(userId)
   }
 
   const fp = (key) => (e) => setProjForm((p) => ({ ...p, [key]: e.target.value }))
@@ -125,7 +123,7 @@ export default function WebsiteDetail() {
               </a>
             </div>
           </div>
-          <span className={`text-sm px-3 py-1 rounded-full font-medium ${STATUS_BADGE[website.status] || STATUS_BADGE.active}`}>
+          <span className={`text-sm px-3 py-1 rounded-full font-medium ${WEBSITE_STATUS_BADGE[website.status] || WEBSITE_STATUS_BADGE.active}`}>
             {website.status.charAt(0).toUpperCase() + website.status.slice(1)}
           </span>
         </div>
@@ -200,7 +198,7 @@ export default function WebsiteDetail() {
                   <div className="flex items-start justify-between mb-2">
                     <p className="font-semibold text-gray-900">{p.name}</p>
                     <div className="flex items-center gap-1">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_BADGE[p.status] || STATUS_BADGE.active}`}>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${WEBSITE_STATUS_BADGE[p.status] || WEBSITE_STATUS_BADGE.active}`}>
                         {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
                       </span>
                       {isAdmin && (
@@ -277,74 +275,62 @@ export default function WebsiteDetail() {
 
       {/* Add Project Modal */}
       {showProjModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <h2 className="font-semibold text-gray-900">Add New Project</h2>
-              <button onClick={() => setShowProjModal(false)} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-4 h-4 text-gray-500" /></button>
+        <Modal title="Add New Project" onClose={() => setShowProjModal(false)} size="md">
+          <form onSubmit={handleAddProject} className="p-6 space-y-4">
+            <FormError message={projError} />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Project Name *</label>
+              <input type="text" value={projForm.name} onChange={fp('name')} className="input-field" required />
             </div>
-            <form onSubmit={handleAddProject} className="p-6 space-y-4">
-              {projError && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{projError}</div>}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Goal / Description</label>
+              <textarea value={projForm.goal} onChange={fp('goal')} className="input-field" rows={2} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Project Name *</label>
-                <input type="text" value={projForm.name} onChange={fp('name')} className="input-field" required />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                <input type="date" value={projForm.startDate} onChange={fp('startDate')} className="input-field" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Goal / Description</label>
-                <textarea value={projForm.goal} onChange={fp('goal')} className="input-field" rows={2} />
+                <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                <input type="date" value={projForm.endDate} onChange={fp('endDate')} className="input-field" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                  <input type="date" value={projForm.startDate} onChange={fp('startDate')} className="input-field" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                  <input type="date" value={projForm.endDate} onChange={fp('endDate')} className="input-field" />
-                </div>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowProjModal(false)} className="btn-secondary flex-1">Cancel</button>
-                <button type="submit" disabled={projSaving} className="btn-primary flex-1">
-                  {projSaving ? 'Creating…' : 'Create Project'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button type="button" onClick={() => setShowProjModal(false)} className="btn-secondary flex-1">Cancel</button>
+              <button type="submit" disabled={projSaving} className="btn-primary flex-1">
+                {projSaving ? 'Creating…' : 'Create Project'}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {/* Add Member Modal */}
       {showMemberModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <h2 className="font-semibold text-gray-900">Add Team Member</h2>
-              <button onClick={() => setShowMemberModal(false)} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-4 h-4 text-gray-500" /></button>
+        <Modal title="Add Team Member" onClose={() => setShowMemberModal(false)} size="sm">
+          <form onSubmit={handleAddMember} className="p-6 space-y-4">
+            <FormError message={memberError} />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Select User</label>
+              <select value={selectedUserId} onChange={(e) => setSelectedUserId(e.target.value)} className="input-field" required>
+                <option value="">Choose a team member…</option>
+                {availableUsers.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name} ({ROLE_LABELS[u.role] || u.role})</option>
+                ))}
+              </select>
+              {availableUsers.length === 0 && (
+                <p className="text-xs text-gray-400 mt-1">All users are already members of this website.</p>
+              )}
             </div>
-            <form onSubmit={handleAddMember} className="p-6 space-y-4">
-              {memberError && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{memberError}</div>}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Select User</label>
-                <select value={selectedUserId} onChange={(e) => setSelectedUserId(e.target.value)} className="input-field" required>
-                  <option value="">Choose a team member…</option>
-                  {availableUsers.map((u) => (
-                    <option key={u.id} value={u.id}>{u.name} ({ROLE_LABELS[u.role] || u.role})</option>
-                  ))}
-                </select>
-                {availableUsers.length === 0 && (
-                  <p className="text-xs text-gray-400 mt-1">All users are already members of this website.</p>
-                )}
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowMemberModal(false)} className="btn-secondary flex-1">Cancel</button>
-                <button type="submit" disabled={memberSaving || !selectedUserId} className="btn-primary flex-1">
-                  {memberSaving ? 'Adding…' : 'Add Member'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div className="flex gap-3 pt-2">
+              <button type="button" onClick={() => setShowMemberModal(false)} className="btn-secondary flex-1">Cancel</button>
+              <button type="submit" disabled={memberSaving || !selectedUserId} className="btn-primary flex-1">
+                {memberSaving ? 'Adding…' : 'Add Member'}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   )
