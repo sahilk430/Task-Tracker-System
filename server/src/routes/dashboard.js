@@ -1,95 +1,83 @@
 const express = require('express')
-const { PrismaClient } = require('@prisma/client')
+const { Task, Website, Project, TaskActivity, User } = require('../models')
 const { authenticate } = require('../middleware/auth')
-const { ADMIN_ROLES } = require('../middleware/roleCheck')
+const { canManageAll } = require('../middleware/roleCheck')
+const { CLOSED_TASK_STATUSES } = require('../config/constants')
 
 const router = express.Router()
-const prisma  = new PrismaClient()
+
+// { status: { [value]: count }, priority: {…}, category: {…} } in one pass
+function tallyTasks(tasks) {
+  const tally = { status: {}, priority: {}, category: {} }
+  for (const task of tasks) {
+    for (const field in tally) tally[field][task[field]] = (tally[field][task[field]] || 0) + 1
+  }
+  return tally
+}
+
+// Assigned vs done counts per assignee, busiest first
+async function getTeamWorkload() {
+  const groups = await Task.aggregate([
+    { $group: {
+      _id:      '$assignee',
+      assigned: { $sum: 1 },
+      done:     { $sum: { $cond: [{ $eq: ['$status', 'done'] }, 1, 0] } },
+    } },
+    { $sort: { assigned: -1 } },
+  ])
+  const users   = await User.find({ _id: { $in: groups.map((g) => g._id) } }).select('name role')
+  const userMap = new Map(users.map((u) => [u.id, u]))
+
+  return groups
+    .filter((g) => userMap.has(g._id.toString()))
+    .map((g) => {
+      const { id, name, role } = userMap.get(g._id.toString())
+      return { id, name, role, assigned: g.assigned, done: g.done }
+    })
+}
 
 // GET /api/dashboard/stats
 router.get('/stats', authenticate, async (req, res) => {
-  try {
-    const isAdmin   = ADMIN_ROLES.includes(req.user.role)
-    const isManager = req.user.role === 'marketing_manager'
-    const canSeeAll = isAdmin || isManager
+  const canSeeAll  = canManageAll(req.user)
+  const taskFilter = canSeeAll ? {} : { assignee: req.user.id }
+  const now        = new Date()
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
 
-    const taskWhere  = canSeeAll ? {} : { assignedTo: req.user.id }
-    const now        = new Date()
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+  // .exec() → a real Promise, so it can be awaited twice (a Query would re-run and throw)
+  const tasksPromise = Task.find(taskFilter).select('status priority category').lean().exec()
+  // Non-managers only see activity on their own tasks — reuse the task query for the ids
+  const activityPromise = tasksPromise.then((tasks) =>
+    TaskActivity.find(canSeeAll ? {} : { task: { $in: tasks.map((t) => t._id) } })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .populate('user', 'name')
+      .populate('task', 'title')
+  )
 
-    const [
-      allTasks,
-      overdueCount,
-      completedThisMonth,
-      totalWebsites,
-      totalProjects,
-      recentActivity,
-    ] = await Promise.all([
-      prisma.task.findMany({
-        where: taskWhere,
-        select: { status: true, priority: true, category: true },
-      }),
-      prisma.task.count({
-        where: { ...taskWhere, dueDate: { lt: now }, status: { notIn: ['done', 'cancelled'] } },
-      }),
-      prisma.task.count({
-        where: { ...taskWhere, status: 'done', updatedAt: { gte: monthStart } },
-      }),
-      canSeeAll ? prisma.website.count({ where: { status: { not: 'archived' } } }) : Promise.resolve(null),
-      canSeeAll ? prisma.project.count() : Promise.resolve(null),
-      prisma.taskActivity.findMany({
-        where: canSeeAll ? {} : { task: { assignedTo: req.user.id } },
-        orderBy: { createdAt: 'desc' },
-        take: 10,
-        include: {
-          user: { select: { id: true, name: true } },
-          task: { select: { id: true, title: true } },
-        },
-      }),
+  const [tasks, overdueCount, completedThisMonth, totalWebsites, totalProjects, recentActivity, teamWorkload] =
+    await Promise.all([
+      tasksPromise,
+      Task.countDocuments({ ...taskFilter, dueDate: { $lt: now }, status: { $nin: CLOSED_TASK_STATUSES } }),
+      Task.countDocuments({ ...taskFilter, status: 'done', updatedAt: { $gte: monthStart } }),
+      canSeeAll ? Website.countDocuments({ status: { $ne: 'archived' } }) : null,
+      canSeeAll ? Project.countDocuments() : null,
+      activityPromise,
+      canSeeAll ? getTeamWorkload() : null,
     ])
 
-    // Aggregate
-    const tasksByStatus   = {}
-    const tasksByPriority = {}
-    const tasksByCategory = {}
-    for (const t of allTasks) {
-      tasksByStatus[t.status]     = (tasksByStatus[t.status]     || 0) + 1
-      tasksByPriority[t.priority] = (tasksByPriority[t.priority] || 0) + 1
-      tasksByCategory[t.category] = (tasksByCategory[t.category] || 0) + 1
-    }
-
-    // Team workload — admin/manager only
-    let teamWorkload = null
-    if (canSeeAll) {
-      const [assignedGroups, doneGroups] = await Promise.all([
-        prisma.task.groupBy({ by: ['assignedTo'], _count: { id: true } }),
-        prisma.task.groupBy({ by: ['assignedTo'], where: { status: 'done' }, _count: { id: true } }),
-      ])
-      const doneMap = Object.fromEntries(doneGroups.map((g) => [g.assignedTo, g._count.id]))
-      const users   = await prisma.user.findMany({
-        where: { id: { in: assignedGroups.map((g) => g.assignedTo) } },
-        select: { id: true, name: true, role: true },
-      })
-      const userMap = Object.fromEntries(users.map((u) => [u.id, u]))
-      teamWorkload = assignedGroups
-        .map((g) => ({ ...userMap[g.assignedTo], assigned: g._count.id, done: doneMap[g.assignedTo] || 0 }))
-        .filter((u) => u.name)
-        .sort((a, b) => b.assigned - a.assigned)
-    }
-
-    res.json({
-      totalTasks: allTasks.length,
-      tasksByStatus,
-      tasksByPriority,
-      tasksByCategory,
-      overdueCount,
-      completedThisMonth,
-      totalWebsites,
-      totalProjects,
-      recentActivity,
-      teamWorkload,
-    })
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Server error.' }) }
+  const tally = tallyTasks(tasks)
+  res.json({
+    totalTasks:      tasks.length,
+    tasksByStatus:   tally.status,
+    tasksByPriority: tally.priority,
+    tasksByCategory: tally.category,
+    overdueCount,
+    completedThisMonth,
+    totalWebsites,
+    totalProjects,
+    recentActivity,
+    teamWorkload,
+  })
 })
 
 module.exports = router
