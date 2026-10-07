@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CheckSquare, Globe, TrendingUp, AlertTriangle, FolderOpen, Activity, Users } from 'lucide-react'
-import { getStats } from '../api/dashboard'
-import useAuthStore from '../store/authStore'
-import { ROLE_LABELS, ROLE_BADGE_COLORS, ADMIN_ROLES, STATUS_LABELS, PRIORITY_LABELS } from '../utils/constants'
+import { useDashboardStats } from '../hooks/queries'
+import { useUser } from '../hooks/useAuth'
+import StatCard from '../components/dashboard/StatCard'
+import BarChart from '../components/dashboard/BarChart'
+import { ROLE_LABELS, ADMIN_ROLES, STATUS_LABELS, PRIORITY_LABELS } from '../utils/constants'
+import { fmtDateTime } from '../utils/format'
 
+// Short labels — the dashboard bar labels are narrow
 const CATEGORY_LABELS = {
   on_page: 'On-Page', off_page: 'Off-Page', technical: 'Technical',
   content: 'Content', research: 'Research', reporting: 'Reporting', other: 'Other',
@@ -26,53 +29,13 @@ const PRIORITY_BAR_COLORS = {
   critical: 'bg-red-500', high: 'bg-orange-400', medium: 'bg-yellow-400', low: 'bg-green-400',
 }
 
-function StatCard({ icon: Icon, label, value, sub, color, onClick }) {
-  return (
-    <div onClick={onClick} className={`card p-5 flex items-center gap-4 ${onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}>
-      <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
-        <Icon className="w-5 h-5 text-white" />
-      </div>
-      <div>
-        <p className="text-2xl font-bold text-gray-900">{value ?? '—'}</p>
-        <p className="text-sm text-gray-500">{label}</p>
-        {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
-      </div>
-    </div>
-  )
-}
-
-function BarChart({ data, colors, total }) {
-  if (!total) return <p className="text-sm text-gray-400 italic">No data yet.</p>
-  return (
-    <div className="space-y-2">
-      {Object.entries(data).map(([key, count]) => (
-        <div key={key} className="flex items-center gap-3">
-          <span className="text-xs text-gray-500 w-24 flex-shrink-0 truncate">{colors === STATUS_BAR_COLORS ? STATUS_LABELS[key] : CATEGORY_LABELS[key] || key}</span>
-          <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full ${colors[key] || 'bg-blue-400'}`}
-              style={{ width: `${Math.round((count / total) * 100)}%` }} />
-          </div>
-          <span className="text-xs font-medium text-gray-700 w-8 text-right">{count}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-const fmtTime = (d) => new Date(d).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-
 export default function Dashboard() {
   const navigate = useNavigate()
-  const user     = useAuthStore((s) => s.user)
+  const user     = useUser()
   const isAdmin  = ADMIN_ROLES.includes(user?.role)
   const canSeeAll = isAdmin || user?.role === 'marketing_manager'
 
-  const [stats, setStats]   = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    getStats().then(({ data }) => setStats(data)).catch(() => {}).finally(() => setLoading(false))
-  }, [])
+  const { data: stats, isPending: loading } = useDashboardStats()
 
   const inProgress = stats?.tasksByStatus?.in_progress || 0
 
@@ -115,7 +78,7 @@ export default function Dashboard() {
           <h3 className="text-sm font-semibold text-gray-700 mb-4">Tasks by Status</h3>
           {loading
             ? <div className="space-y-2">{[1,2,3,4].map((i) => <div key={i} className="h-4 bg-gray-100 rounded animate-pulse" />)}</div>
-            : <BarChart data={stats?.tasksByStatus || {}} colors={STATUS_BAR_COLORS} total={stats?.totalTasks} />
+            : <BarChart data={stats?.tasksByStatus || {}} colors={STATUS_BAR_COLORS} labels={STATUS_LABELS} total={stats?.totalTasks} />
           }
         </div>
 
@@ -124,7 +87,7 @@ export default function Dashboard() {
           <h3 className="text-sm font-semibold text-gray-700 mb-4">Tasks by Category</h3>
           {loading
             ? <div className="space-y-2">{[1,2,3,4].map((i) => <div key={i} className="h-4 bg-gray-100 rounded animate-pulse" />)}</div>
-            : <BarChart data={stats?.tasksByCategory || {}} colors={{}} total={stats?.totalTasks} />
+            : <BarChart data={stats?.tasksByCategory || {}} labels={CATEGORY_LABELS} total={stats?.totalTasks} />
           }
         </div>
       </div>
@@ -204,7 +167,7 @@ export default function Dashboard() {
                       <span className="font-medium">{a.user?.name}</span>{' '}
                       {(ACTIVITY_TEXT[a.action] || (() => a.action))(a)}
                     </p>
-                    <p className="text-xs text-gray-400">{fmtTime(a.createdAt)}</p>
+                    <p className="text-xs text-gray-400">{fmtDateTime(a.createdAt)}</p>
                   </div>
                 </div>
               ))}

@@ -53,3 +53,43 @@ export const PRIORITY_LABELS = {
 export const VALID_ROLES     = Object.keys(ROLE_LABELS)
 export const ADMIN_ROLES     = ['super_admin', 'team_lead']
 export const MANAGEMENT_ROLES = ['super_admin', 'team_lead', 'marketing_manager']
+
+export const STATUS_FLOW = ['backlog', 'todo', 'in_progress', 'in_review', 'done']
+
+export const PRIORITY_DOT = {
+  critical: 'bg-red-500',
+  high:     'bg-orange-500',
+  medium:   'bg-yellow-400',
+  low:      'bg-green-500',
+}
+
+export const CATEGORIES = [
+  { value: 'on_page',   label: 'On-Page SEO' },
+  { value: 'off_page',  label: 'Off-Page SEO' },
+  { value: 'technical', label: 'Technical SEO' },
+  { value: 'content',   label: 'Content' },
+  { value: 'research',  label: 'Research' },
+  { value: 'reporting', label: 'Reporting' },
+  { value: 'other',     label: 'Other' },
+]
+
+export const categoryLabel = (value) =>
+  CATEGORIES.find((c) => c.value === value)?.label || value
+
+export const CATEGORY_COLORS = {
+  on_page:   'bg-blue-100 text-blue-700',
+  off_page:  'bg-purple-100 text-purple-700',
+  technical: 'bg-orange-100 text-orange-700',
+  content:   'bg-green-100 text-green-700',
+  research:  'bg-yellow-100 text-yellow-700',
+  reporting: 'bg-gray-100 text-gray-700',
+  other:     'bg-gray-100 text-gray-500',
+}
+
+// Website / project status
+export const WEBSITE_STATUS_BADGE = {
+  active:    'bg-green-100 text-green-700',
+  paused:    'bg-yellow-100 text-yellow-700',
+  completed: 'bg-blue-100 text-blue-700',
+  archived:  'bg-gray-100 text-gray-500',
+}

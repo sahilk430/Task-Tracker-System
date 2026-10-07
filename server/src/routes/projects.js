@@ -11,7 +11,6 @@ const projectSelect = {
   id: true, name: true, goal: true, startDate: true, endDate: true,
   status: true, createdAt: true, updatedAt: true,
   website:  { select: { id: true, name: true, domain: true } },
-  creator:  { select: { id: true, name: true } },
   _count:   { select: { tasks: true } },
 }
 

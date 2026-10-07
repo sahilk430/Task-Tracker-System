@@ -1,114 +1,45 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Download, Filter, BarChart2, Globe, CheckSquare, AlertTriangle, Clock } from 'lucide-react'
-import { getTaskReport, getWebsiteReport } from '../api/reports'
-import { getWebsites } from '../api/websites'
-import { getUsers } from '../api/users'
-import { STATUS_LABELS, STATUS_COLORS, PRIORITY_LABELS, PRIORITY_COLORS } from '../utils/constants'
+import { useTaskReport, useWebsiteReport, useWebsites, useUsers } from '../hooks/queries'
+import SummaryCard from '../components/reports/SummaryCard'
+import {
+  STATUS_LABELS, STATUS_COLORS, PRIORITY_LABELS, PRIORITY_DOT, CATEGORIES, categoryLabel,
+} from '../utils/constants'
+import { exportTasksCSV } from '../utils/exportCsv'
 
-const CATEGORIES = [
-  { value: 'on_page',   label: 'On-Page SEO' },
-  { value: 'off_page',  label: 'Off-Page SEO' },
-  { value: 'technical', label: 'Technical SEO' },
-  { value: 'content',   label: 'Content' },
-  { value: 'research',  label: 'Research' },
-  { value: 'reporting', label: 'Reporting' },
-  { value: 'other',     label: 'Other' },
-]
-
-const PRIORITY_DOT = { critical:'bg-red-500', high:'bg-orange-500', medium:'bg-yellow-400', low:'bg-green-500' }
-
-function exportCSV(tasks) {
-  const headers = [
-    'Title','Status','Priority','Category','Website','Project',
-    'Assigned To','Due Date','Created At','Est. Hours','Actual Hours',
-    'Target URL','Target Keywords','Search Intent',
-    'Current Rank','Target Rank','Tools Used','Tags',
-    'Expected Result','Actual Result',
-  ]
-  const esc = (v) => (v == null ? '' : String(v).replace(/"/g, '""'))
-  const rows = tasks.map((t) => [
-    esc(t.title),
-    esc(STATUS_LABELS[t.status]   || t.status),
-    esc(PRIORITY_LABELS[t.priority] || t.priority),
-    esc(CATEGORIES.find((c) => c.value === t.category)?.label || t.category),
-    esc(t.website?.name), esc(t.project?.name),
-    esc(t.assignee?.name),
-    esc(t.dueDate   ? new Date(t.dueDate).toLocaleDateString()   : ''),
-    esc(t.createdAt ? new Date(t.createdAt).toLocaleDateString() : ''),
-    esc(t.estimatedHours), esc(t.actualHours),
-    esc(t.targetUrl), esc(t.targetKeywords), esc(t.searchIntent),
-    esc(t.currentRanking), esc(t.targetRanking),
-    esc(t.toolsUsed), esc(t.tags),
-    esc(t.expectedResult), esc(t.actualResult),
-  ])
-  const csv  = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(',')).join('\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-  const url  = URL.createObjectURL(blob)
-  const a    = document.createElement('a')
-  a.href = url
-  a.download = `tasks-report-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+const BLANK_FILTERS = {
+  dateFrom: '', dateTo: '', dateField: 'createdAt',
+  websiteId: '', status: '', priority: '', category: '', assignedTo: '',
 }
 
-function SummaryCard({ icon: Icon, label, value, color }) {
-  return (
-    <div className="card p-4 flex items-center gap-3">
-      <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${color}`}>
-        <Icon className="w-4 h-4 text-white" />
-      </div>
-      <div>
-        <p className="text-xl font-bold text-gray-900">{value}</p>
-        <p className="text-xs text-gray-500">{label}</p>
-      </div>
-    </div>
-  )
-}
+const toParams = (f) => Object.fromEntries(Object.entries(f).filter(([, v]) => v))
 
 export default function Reports() {
   const [tab, setTab] = useState('tasks')
 
-  const [tasks, setTasks]     = useState([])
-  const [summary, setSummary] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [websites, setWebsites] = useState([])
-  const [allUsers, setAllUsers] = useState([])
-  const [filters, setFilters]   = useState({
-    dateFrom: '', dateTo: '', dateField: 'createdAt',
-    websiteId: '', status: '', priority: '', category: '', assignedTo: '',
-  })
+  const [filters, setFilters]   = useState(BLANK_FILTERS)
+  // Report only re-runs when "Run Report" is clicked, not on every filter change
+  const [reportParams, setReportParams] = useState(() => toParams(BLANK_FILTERS))
 
-  const [siteData, setSiteData]       = useState([])
-  const [siteLoading, setSiteLoading] = useState(false)
+  const { data: websites = [] } = useWebsites()
+  const { data: allUsers = [] } = useUsers()
 
-  useEffect(() => {
-    getWebsites().then(({ data }) => setWebsites(data.websites)).catch(() => {})
-    getUsers().then(({ data }) => setAllUsers(data.users)).catch(() => {})
-    runReport()
-  }, [])
+  const taskReport = useTaskReport(reportParams)
+  const tasks      = taskReport.data?.tasks ?? []
+  const summary    = taskReport.data?.summary
+  const loading    = taskReport.isFetching
 
-  useEffect(() => {
-    if (tab === 'websites' && siteData.length === 0) {
-      setSiteLoading(true)
-      getWebsiteReport().then(({ data }) => setSiteData(data.websites)).catch(() => {}).finally(() => setSiteLoading(false))
-    }
-  }, [tab])
+  const { data: siteData = [], isPending: siteLoading } = useWebsiteReport({ enabled: tab === 'websites' })
 
-  const runReport = (overrideFilters) => {
-    setLoading(true)
-    const f = overrideFilters ?? filters
-    const params = {}
-    Object.entries(f).forEach(([k, v]) => { if (v) params[k] = v })
-    getTaskReport(params)
-      .then(({ data }) => { setTasks(data.tasks); setSummary(data.summary) })
-      .catch(() => {})
-      .finally(() => setLoading(false))
+  const runReport = (f = filters) => {
+    const params = toParams(f)
+    if (JSON.stringify(params) === JSON.stringify(reportParams)) taskReport.refetch()
+    else setReportParams(params)
   }
 
   const clearFilters = () => {
-    const blank = { dateFrom:'', dateTo:'', dateField:'createdAt', websiteId:'', status:'', priority:'', category:'', assignedTo:'' }
-    setFilters(blank)
-    runReport(blank)
+    setFilters(BLANK_FILTERS)
+    runReport(BLANK_FILTERS)
   }
 
   const sf = (key) => (e) => setFilters((p) => ({ ...p, [key]: e.target.value }))
@@ -213,7 +144,7 @@ export default function Reports() {
           <div className="card overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <p className="text-sm font-semibold text-gray-700">{tasks.length} task{tasks.length !== 1 ? 's' : ''} found</p>
-              <button onClick={() => exportCSV(tasks)} disabled={tasks.length === 0}
+              <button onClick={() => exportTasksCSV(tasks)} disabled={tasks.length === 0}
                 className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-40">
                 <Download className="w-4 h-4" /> Export CSV
               </button>
@@ -254,7 +185,7 @@ export default function Reports() {
                           </div>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">
-                          {CATEGORIES.find((c) => c.value === t.category)?.label || t.category}
+                          {categoryLabel(t.category)}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">{t.website?.name || '—'}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">{t.assignee?.name || '—'}</td>

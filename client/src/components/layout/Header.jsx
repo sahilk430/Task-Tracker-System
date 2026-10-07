@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { LogOut, ChevronDown } from 'lucide-react'
-import useAuthStore from '../store/authStore'
-import { ROLE_LABELS } from '../utils/constants'
+import { useUser, useLogout } from '../../hooks/useAuth'
+import { ROLE_LABELS } from '../../utils/constants'
 
 const PAGE_TITLES = {
   '/dashboard': 'Dashboard',
@@ -14,7 +14,8 @@ const PAGE_TITLES = {
 
 export default function Header() {
   const [open, setOpen] = useState(false)
-  const { user, logout } = useAuthStore()
+  const user      = useUser()
+  const logout    = useLogout()
   const navigate  = useNavigate()
   const location  = useLocation()
 

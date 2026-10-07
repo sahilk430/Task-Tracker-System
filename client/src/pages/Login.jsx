@@ -1,40 +1,32 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { useNavigate, Navigate } from 'react-router-dom'
 import { BarChart2, Eye, EyeOff } from 'lucide-react'
-import { login } from '../api/auth'
-import useAuthStore from '../store/authStore'
+import { useLogin } from '../hooks/useAuth'
+import { getToken } from '../api/token'
 
 export default function Login() {
   const [form, setForm]       = useState({ email: '', password: '' })
   const [showPw, setShowPw]   = useState(false)
-  const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
-  const { setAuth, token }    = useAuthStore()
+  const loginMutation         = useLogin()
+  const loading               = loginMutation.isPending
   const navigate              = useNavigate()
-
-  useEffect(() => {
-    if (token) navigate('/dashboard', { replace: true })
-  }, [token, navigate])
 
   const handleChange = (e) => {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }))
     setError('')
   }
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault()
-    setLoading(true)
     setError('')
-    try {
-      const { data } = await login(form.email, form.password)
-      setAuth(data.user, data.token)
-      navigate('/dashboard', { replace: true })
-    } catch (err) {
-      setError(err.response?.data?.message || 'Login failed. Please try again.')
-    } finally {
-      setLoading(false)
-    }
+    loginMutation.mutate(form, {
+      onSuccess: () => navigate('/dashboard', { replace: true }),
+      onError:   (err) => setError(err.response?.data?.message || 'Login failed. Please try again.'),
+    })
   }
+
+  if (getToken()) return <Navigate to="/dashboard" replace />
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">

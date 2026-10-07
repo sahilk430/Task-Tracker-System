@@ -1,59 +1,59 @@
-import { useEffect, useState } from 'react'
-import { UserPlus, Search, Edit2, ToggleLeft, ToggleRight, X } from 'lucide-react'
-import { getUsers, createUser, updateUser, toggleUserActive } from '../api/users'
+import { useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { UserPlus, Search, Edit2, ToggleLeft, ToggleRight } from 'lucide-react'
+import { createUser, updateUser, toggleUserActive } from '../api/users'
+import { useUsers } from '../hooks/queries'
+import { useDebounce } from '../hooks/useDebounce'
+import Modal from '../components/ui/Modal'
+import FormError from '../components/ui/FormError'
 import { ROLE_LABELS, ROLE_BADGE_COLORS, VALID_ROLES } from '../utils/constants'
+import { fmtDateLong } from '../utils/format'
 
 const EMPTY_FORM = { name: '', email: '', password: '', role: 'seo_executive' }
 
 export default function Users() {
-  const [users, setUsers]           = useState([])
-  const [loading, setLoading]       = useState(true)
+  const queryClient                 = useQueryClient()
   const [search, setSearch]         = useState('')
   const [roleFilter, setRoleFilter] = useState('')
   const [showModal, setShowModal]   = useState(false)
   const [editing, setEditing]       = useState(null)
   const [form, setForm]             = useState(EMPTY_FORM)
-  const [saving, setSaving]         = useState(false)
   const [formError, setFormError]   = useState('')
 
-  const fetchUsers = () => {
-    setLoading(true)
-    const params = {}
-    if (search)     params.search = search
-    if (roleFilter) params.role   = roleFilter
-    getUsers(params)
-      .then(({ data }) => setUsers(data.users))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }
+  const debouncedSearch = useDebounce(search)
 
-  useEffect(() => { fetchUsers() }, [search, roleFilter])
+  const params = {}
+  if (debouncedSearch) params.search = debouncedSearch
+  if (roleFilter) params.role   = roleFilter
+  const { data: users = [], isPending: loading } = useUsers(params)
+
+  const invalidateUsers = () => queryClient.invalidateQueries({ queryKey: ['users'] })
 
   const openAdd = () => { setEditing(null); setForm(EMPTY_FORM); setFormError(''); setShowModal(true) }
   const openEdit = (u) => { setEditing(u); setForm({ name: u.name, email: u.email, password: '', role: u.role }); setFormError(''); setShowModal(true) }
   const closeModal = () => { setShowModal(false); setEditing(null); setFormError('') }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault(); setSaving(true); setFormError('')
-    try {
-      if (editing) {
-        const payload = { name: form.name, email: form.email, role: form.role }
-        if (form.password) payload.password = form.password
-        await updateUser(editing.id, payload)
-      } else {
-        await createUser(form)
-      }
-      closeModal(); fetchUsers()
-    } catch (err) {
-      setFormError(err.response?.data?.message || 'Something went wrong.')
-    } finally { setSaving(false) }
-  }
+  const saveUser = useMutation({
+    mutationFn: () => {
+      if (!editing) return createUser(form)
+      const payload = { name: form.name, email: form.email, role: form.role }
+      if (form.password) payload.password = form.password
+      return updateUser(editing.id, payload)
+    },
+    onSuccess: () => { closeModal(); invalidateUsers() },
+    onError:   (err) => setFormError(err.response?.data?.message || 'Something went wrong.'),
+  })
+  const saving = saveUser.isPending
 
-  const handleToggle = async (u) => {
-    try { await toggleUserActive(u.id); fetchUsers() } catch {}
-  }
+  const toggleActive = useMutation({
+    mutationFn: (u) => toggleUserActive(u.id),
+    onSuccess:  invalidateUsers,
+  })
 
-  const fmt = (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  const handleSubmit = (e) => { e.preventDefault(); setFormError(''); saveUser.mutate() }
+
+  const handleToggle = (u) => toggleActive.mutate(u)
+
 
   return (
     <div className="space-y-5">
@@ -116,7 +116,7 @@ export default function Users() {
                       {u.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </td>
-                  <td className="px-5 py-4 text-gray-500">{fmt(u.createdAt)}</td>
+                  <td className="px-5 py-4 text-gray-500">{fmtDateLong(u.createdAt)}</td>
                   <td className="px-5 py-4">
                     <div className="flex items-center justify-end gap-1">
                       <button onClick={() => openEdit(u)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-blue-600 transition-colors">
@@ -136,44 +136,38 @@ export default function Users() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <h2 className="font-semibold text-gray-900">{editing ? 'Edit User' : 'Add New User'}</h2>
-              <button onClick={closeModal} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-4 h-4 text-gray-500" /></button>
+        <Modal title={editing ? 'Edit User' : 'Add New User'} onClose={closeModal} size="md">
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <FormError message={formError} />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+              <input type="text" value={form.name} onChange={(e) => setForm(f => ({...f, name: e.target.value}))} className="input-field" required />
             </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {formError && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{formError}</div>}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                <input type="text" value={form.name} onChange={(e) => setForm(f => ({...f, name: e.target.value}))} className="input-field" required />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input type="email" value={form.email} onChange={(e) => setForm(f => ({...f, email: e.target.value}))} className="input-field" required />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Password {editing && <span className="text-gray-400 font-normal">(leave blank to keep current)</span>}
-                </label>
-                <input type="password" value={form.password} onChange={(e) => setForm(f => ({...f, password: e.target.value}))}
-                  className="input-field" minLength={6} required={!editing} placeholder={editing ? '••••••' : ''} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                <select value={form.role} onChange={(e) => setForm(f => ({...f, role: e.target.value}))} className="input-field">
-                  {VALID_ROLES.filter(r => r !== 'client').map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
-                </select>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={closeModal} className="btn-secondary flex-1">Cancel</button>
-                <button type="submit" disabled={saving} className="btn-primary flex-1">
-                  {saving ? 'Saving…' : editing ? 'Update User' : 'Create User'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input type="email" value={form.email} onChange={(e) => setForm(f => ({...f, email: e.target.value}))} className="input-field" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Password {editing && <span className="text-gray-400 font-normal">(leave blank to keep current)</span>}
+              </label>
+              <input type="password" value={form.password} onChange={(e) => setForm(f => ({...f, password: e.target.value}))}
+                className="input-field" minLength={6} required={!editing} placeholder={editing ? '••••••' : ''} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+              <select value={form.role} onChange={(e) => setForm(f => ({...f, role: e.target.value}))} className="input-field">
+                {VALID_ROLES.filter(r => r !== 'client').map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+              </select>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button type="button" onClick={closeModal} className="btn-secondary flex-1">Cancel</button>
+              <button type="submit" disabled={saving} className="btn-primary flex-1">
+                {saving ? 'Saving…' : editing ? 'Update User' : 'Create User'}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   )
