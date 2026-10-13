@@ -1,9 +1,17 @@
 import axios from 'axios'
 import { getToken, clearToken } from './token'
 
+// Locally VITE_API_URL is unset and requests go through the Vite proxy.
+// In production (Vercel) it points at the public backend, e.g. the ngrok URL.
+const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '')
+
 const api = axios.create({
-  baseURL: '/api',
-  headers: { 'Content-Type': 'application/json' },
+  baseURL: `${API_URL}/api`,
+  headers: {
+    'Content-Type': 'application/json',
+    // Skip ngrok's free-tier browser warning page, which would break JSON responses
+    'ngrok-skip-browser-warning': 'true',
+  },
 })
 
 // Attach JWT token to every request
