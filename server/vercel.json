@@ -1,4 +1,5 @@
 {
   "framework": null,
+  "git": { "deploymentEnabled": false },
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
 }
