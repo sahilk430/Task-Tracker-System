@@ -13,25 +13,7 @@ async function start() {
   }
 
   await connectDB(process.env.MONGODB_URI)
-  app.listen(PORT, async () => {
-    console.log(`Server running on http://localhost:${PORT}`)
-    if (process.env.NGROK_AUTHTOKEN) await startTunnel()
-  })
-}
-
-// Optional public URL via ngrok — enabled only when NGROK_AUTHTOKEN is set
-async function startTunnel() {
-  try {
-    const ngrok = require('@ngrok/ngrok')
-    const listener = await ngrok.forward({
-      addr: PORT,
-      authtoken_from_env: true,
-      domain: process.env.NGROK_DOMAIN || undefined,
-    })
-    console.log(`ngrok tunnel: ${listener.url()}`)
-  } catch (err) {
-    console.error('ngrok tunnel failed:', err.message)
-  }
+  app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`))
 }
 
 start().catch((err) => {
