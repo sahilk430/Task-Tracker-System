@@ -73,16 +73,6 @@ export default function Login() {
             </button>
           </form>
         </div>
-
-        {/* Demo credentials */}
-        <div className="mt-4 card p-4">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Demo credentials</p>
-          <div className="space-y-1 text-xs text-gray-600 font-mono">
-            <div className="flex justify-between gap-4"><span className="font-sans font-medium text-gray-700">Super Admin</span><span>admin@seoteam.com / admin123</span></div>
-            <div className="flex justify-between gap-4"><span className="font-sans font-medium text-gray-700">Team Lead</span><span>sarah@seoteam.com / password123</span></div>
-            <div className="flex justify-between gap-4"><span className="font-sans font-medium text-gray-700">SEO Executive</span><span>mike@seoteam.com / password123</span></div>
-          </div>
-        </div>
       </div>
     </div>
   )
