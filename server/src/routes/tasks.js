@@ -2,7 +2,7 @@ const express = require('express')
 const { body } = require('express-validator')
 const { Task, TaskComment, TaskActivity } = require('../models')
 const { authenticate } = require('../middleware/auth')
-const { requireRoles, isAdmin, canManageAll } = require('../middleware/roleCheck')
+const { requireRoles, isAdmin, canManageAll, canAccessTask } = require('../middleware/roleCheck')
 const { validate } = require('../middleware/validate')
 const { ADMIN_ROLES, MANAGEMENT_ROLES } = require('../config/constants')
 const { HttpError, orNotFound } = require('../utils/httpError')
@@ -26,12 +26,19 @@ const present = async (task) => (await withCounts([await task.populate(POPULATE)
 const logActivity = (taskId, userId, entry) =>
   TaskActivity.create({ task: taskId, user: userId, ...entry })
 
+// Loads a task the current user may see, or throws 404 / 403
+async function findAccessibleTask(id, user, projection) {
+  const task = orNotFound(await Task.findById(id).select(projection), 'Task')
+  if (!canAccessTask(user, task)) throw new HttpError(403, 'Access denied.')
+  return task
+}
+
 // GET /api/tasks
 router.get('/', authenticate, async (req, res) => {
   const filter = Task.filterFromQuery(req.query)
-  if (req.query.search) filter.title = containsRegex(req.query.search)
-  // Non-admins only see tasks assigned to them
-  if (!isAdmin(req.user)) filter.assignee = req.user.id
+  if (typeof req.query.search === 'string' && req.query.search) filter.title = containsRegex(req.query.search)
+  // Team members only see tasks assigned to them; `mine=true` narrows managers the same way
+  if (!canManageAll(req.user) || req.query.mine === 'true') filter.assignee = req.user.id
 
   const tasks = await Task.find(filter).populate(POPULATE).sort({ createdAt: -1 })
   res.json({ tasks: await withCounts(tasks, COUNTS) })
@@ -39,11 +46,8 @@ router.get('/', authenticate, async (req, res) => {
 
 // GET /api/tasks/:id
 router.get('/:id', authenticate, async (req, res) => {
-  const task = await present(orNotFound(await Task.findById(req.params.id), 'Task'))
-  if (!isAdmin(req.user) && task.assignee?.id !== req.user.id) {
-    throw new HttpError(403, 'Access denied.')
-  }
-  res.json({ task })
+  const task = await findAccessibleTask(req.params.id, req.user)
+  res.json({ task: await present(task) })
 })
 
 // POST /api/tasks
@@ -59,17 +63,15 @@ router.post('/', authenticate, requireRoles(...MANAGEMENT_ROLES),
       ...Task.fieldsFromBody(req.body, { canManage: true }),
       creator: req.user.id,
     })
+    await logActivity(task._id, req.user.id, { action: 'created', fieldName: 'assignedTo', newValue: String(task.assignee) })
     res.status(201).json({ task: await present(task), message: 'Task created successfully.' })
   }
 )
 
 // PUT /api/tasks/:id
 router.put('/:id', authenticate, async (req, res) => {
-  const task = orNotFound(await Task.findById(req.params.id), 'Task')
+  const task = await findAccessibleTask(req.params.id, req.user)
   const canManage = canManageAll(req.user)
-  if (!canManage && task.assignee.toString() !== req.user.id) {
-    throw new HttpError(403, 'Access denied.')
-  }
 
   // Remember tracked values so changes can be written to the audit log
   const tracked = [
@@ -103,6 +105,7 @@ router.delete('/:id', authenticate, requireRoles(...ADMIN_ROLES), async (req, re
 
 // GET /api/tasks/:id/comments
 router.get('/:id/comments', authenticate, async (req, res) => {
+  await findAccessibleTask(req.params.id, req.user, 'assignee')
   const comments = await TaskComment.find({ task: req.params.id })
     .populate(...COMMENT_AUTHOR)
     .sort({ createdAt: 1 })
@@ -113,7 +116,7 @@ router.get('/:id/comments', authenticate, async (req, res) => {
 router.post('/:id/comments', authenticate,
   validate([body('body').trim().notEmpty().withMessage('Comment cannot be empty.')]),
   async (req, res) => {
-    orNotFound(await Task.exists({ _id: req.params.id }), 'Task')
+    await findAccessibleTask(req.params.id, req.user, 'assignee')
     const comment = await TaskComment.create({ task: req.params.id, user: req.user.id, body: req.body.body })
     await Promise.all([
       comment.populate(...COMMENT_AUTHOR),
@@ -135,6 +138,7 @@ router.delete('/:id/comments/:commentId', authenticate, async (req, res) => {
 
 // GET /api/tasks/:id/activity
 router.get('/:id/activity', authenticate, async (req, res) => {
+  await findAccessibleTask(req.params.id, req.user, 'assignee')
   const activity = await TaskActivity.find({ task: req.params.id })
     .populate('user', 'name')
     .sort({ createdAt: -1 })

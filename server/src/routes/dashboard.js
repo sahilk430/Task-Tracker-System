@@ -1,8 +1,9 @@
 const express = require('express')
-const { Task, Website, Project, TaskActivity, User } = require('../models')
+const { Types } = require('mongoose')
+const { Task, Website, Project, User } = require('../models')
 const { authenticate } = require('../middleware/auth')
 const { canManageAll } = require('../middleware/roleCheck')
-const { CLOSED_TASK_STATUSES } = require('../config/constants')
+const { taskSummary, recentActivity } = require('../utils/taskStats')
 
 const router = express.Router()
 
@@ -39,7 +40,8 @@ async function getTeamWorkload() {
 // GET /api/dashboard/stats
 router.get('/stats', authenticate, async (req, res) => {
   const canSeeAll  = canManageAll(req.user)
-  const taskFilter = canSeeAll ? {} : { assignee: req.user.id }
+  // ObjectId, not the JWT string: aggregate() (taskSummary) does not cast ids like find() does
+  const taskFilter = canSeeAll ? {} : { assignee: new Types.ObjectId(String(req.user.id)) }
   const now        = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
 
@@ -47,18 +49,18 @@ router.get('/stats', authenticate, async (req, res) => {
   const tasksPromise = Task.find(taskFilter).select('status priority category').lean().exec()
   // Non-managers only see activity on their own tasks — reuse the task query for the ids
   const activityPromise = tasksPromise.then((tasks) =>
-    TaskActivity.find(canSeeAll ? {} : { task: { $in: tasks.map((t) => t._id) } })
-      .sort({ createdAt: -1 })
-      .limit(10)
-      .populate('user', 'name')
-      .populate('task', 'title')
+    recentActivity(canSeeAll ? {} : { task: { $in: tasks.map((t) => t._id) } }, 15)
   )
 
-  const [tasks, overdueCount, completedThisMonth, totalWebsites, totalProjects, recentActivity, teamWorkload] =
+  const [tasks, summary, completedThisMonth, totalWebsites, totalProjects, activity, teamWorkload] =
     await Promise.all([
       tasksPromise,
-      Task.countDocuments({ ...taskFilter, dueDate: { $lt: now }, status: { $nin: CLOSED_TASK_STATUSES } }),
-      Task.countDocuments({ ...taskFilter, status: 'done', updatedAt: { $gte: monthStart } }),
+      taskSummary(taskFilter, now),
+      // completedAt is the real completion time; tasks finished before it existed fall back to updatedAt
+      Task.countDocuments({ ...taskFilter, status: 'done', $or: [
+        { completedAt: { $gte: monthStart } },
+        { completedAt: null, updatedAt: { $gte: monthStart } },
+      ] }),
       canSeeAll ? Website.countDocuments({ status: { $ne: 'archived' } }) : null,
       canSeeAll ? Project.countDocuments() : null,
       activityPromise,
@@ -71,11 +73,13 @@ router.get('/stats', authenticate, async (req, res) => {
     tasksByStatus:   tally.status,
     tasksByPriority: tally.priority,
     tasksByCategory: tally.category,
-    overdueCount,
+    overdueCount:    summary.overdue,
+    // total / completed / pending / inProgress / overdue / cancelled / completionRate
+    summary,
     completedThisMonth,
     totalWebsites,
     totalProjects,
-    recentActivity,
+    recentActivity:  activity,
     teamWorkload,
   })
 })

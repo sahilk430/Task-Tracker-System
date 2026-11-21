@@ -21,6 +21,16 @@ const TASK_CATEGORIES  = ['on_page', 'off_page', 'technical', 'content', 'resear
 // Tasks in these states are never "overdue"
 const CLOSED_TASK_STATUSES = ['done', 'cancelled']
 
+// Dashboard / member summary groups over the real status values.
+// `cancelled` belongs to no group and is excluded from totals and completion %.
+const STATUS_GROUPS = {
+  pending:    ['backlog', 'todo'],
+  inProgress: ['in_progress', 'in_review'],
+  completed:  ['done'],
+}
+// Every status that counts towards a member's workload
+const COUNTED_TASK_STATUSES = Object.values(STATUS_GROUPS).flat()
+
 module.exports = {
   VALID_ROLES,
   ADMIN_ROLES,
@@ -31,4 +41,6 @@ module.exports = {
   TASK_PRIORITIES,
   TASK_CATEGORIES,
   CLOSED_TASK_STATUSES,
+  STATUS_GROUPS,
+  COUNTED_TASK_STATUSES,
 }

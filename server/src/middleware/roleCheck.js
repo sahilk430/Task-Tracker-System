@@ -13,7 +13,15 @@ const requireRoles = (...allowedRoles) => (req, res, next) => {
 }
 
 const isAdmin      = (user) => ADMIN_ROLES.includes(user.role)
-// Admins and marketing managers can see / manage every task
+// Admins and marketing managers can see / manage every task and every member.
+// This is the single rule for task visibility (list, detail, comments, dashboard, members).
 const canManageAll = (user) => MANAGEMENT_ROLES.includes(user.role)
 
-module.exports = { requireRoles, isAdmin, canManageAll }
+// Task-level access: managers see everything, everyone else only their assigned tasks
+const canAccessTask = (user, task) => {
+  if (canManageAll(user)) return true
+  const assignee = task.assignee?._id ?? task.assignee
+  return String(assignee) === String(user.id)
+}
+
+module.exports = { requireRoles, isAdmin, canManageAll, canAccessTask }

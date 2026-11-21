@@ -1,8 +1,8 @@
 const express = require('express')
 const { body } = require('express-validator')
-const { Project, Task } = require('../models')
+const { Project, Task, Website } = require('../models')
 const { authenticate } = require('../middleware/auth')
-const { requireRoles } = require('../middleware/roleCheck')
+const { requireRoles, canManageAll } = require('../middleware/roleCheck')
 const { validate } = require('../middleware/validate')
 const { ADMIN_ROLES } = require('../config/constants')
 const { HttpError, orNotFound } = require('../utils/httpError')
@@ -18,10 +18,19 @@ const COUNTS   = { tasks: [Task, 'project'] }
 // Populated JSON with `_count`, as returned by every project endpoint
 const present = async (project) => (await withCounts([await project.populate(POPULATE)], COUNTS))[0]
 
+// Managers see every website's projects; others only those of websites they are a member of
+async function assertWebsiteAccess(user, websiteId) {
+  if (canManageAll(user)) return
+  if (!(await Website.exists({ _id: websiteId, 'members.user': user.id }))) {
+    throw new HttpError(403, 'Access denied.')
+  }
+}
+
 // GET /api/projects?websiteId=xxx
 router.get('/', authenticate, async (req, res) => {
   const { websiteId } = req.query
-  if (!websiteId) throw new HttpError(400, 'websiteId query param is required.')
+  if (typeof websiteId !== 'string' || !websiteId) throw new HttpError(400, 'websiteId query param is required.')
+  await assertWebsiteAccess(req.user, websiteId)
 
   const projects = await Project.find({ website: websiteId }).populate(POPULATE).sort({ createdAt: -1 })
   res.json({ projects: await withCounts(projects, COUNTS) })
@@ -29,7 +38,9 @@ router.get('/', authenticate, async (req, res) => {
 
 // GET /api/projects/:id
 router.get('/:id', authenticate, async (req, res) => {
-  res.json({ project: await present(orNotFound(await Project.findById(req.params.id), 'Project')) })
+  const project = orNotFound(await Project.findById(req.params.id), 'Project')
+  await assertWebsiteAccess(req.user, project.website)
+  res.json({ project: await present(project) })
 })
 
 // POST /api/projects
