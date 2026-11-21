@@ -1,17 +1,21 @@
 import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, CheckSquare, X, Search } from 'lucide-react'
+import { Plus, CheckSquare, Search } from 'lucide-react'
 import { createTask, deleteTask } from '../api/tasks'
-import { useTasks, useWebsites, useProjects, useUsers } from '../hooks/queries'
+import { useTasks, useWebsites, useProjects, useMembers } from '../hooks/queries'
 import { useUser } from '../hooks/useAuth'
 import { useDebounce } from '../hooks/useDebounce'
 import Modal from '../components/ui/Modal'
 import FormError from '../components/ui/FormError'
+import EmptyState from '../components/ui/EmptyState'
+import QuickFilters from '../components/tasks/QuickFilters'
+import TaskTable from '../components/tasks/TaskTable'
 import {
-  ADMIN_ROLES, STATUS_COLORS, STATUS_LABELS, PRIORITY_LABELS, PRIORITY_DOT,
-  ROLE_LABELS, CATEGORIES, CATEGORY_COLORS, categoryLabel,
+  ADMIN_ROLES, STATUS_LABELS, PRIORITY_LABELS, ROLE_LABELS, CATEGORIES, QUICK_FILTERS, quickFilterParams,
 } from '../utils/constants'
+
+const NO_FILTERS = { websiteId: '', status: '', priority: '', category: '', search: '', dueFrom: '', dueTo: '' }
 
 const EMPTY = {
   title: '', description: '', websiteId: '', projectId: '', category: '',
@@ -22,30 +26,42 @@ const EMPTY = {
 }
 
 export default function Tasks() {
-  const navigate  = useNavigate()
   const user      = useUser()
   const isAdmin   = ADMIN_ROLES.includes(user?.role)
   const canCreate = isAdmin || user?.role === 'marketing_manager'
   const queryClient = useQueryClient()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
 
-  // ?status=... lets other pages (e.g. Dashboard) open this list pre-filtered
-  const [filters, setFilters]   = useState({ websiteId: '', status: searchParams.get('status') || '', priority: '', category: '', search: '' })
+  // ?view=mine|pending|inProgress|completed|overdue (quick filter) and ?status=… let other pages
+  // (e.g. the Dashboard cards) open this list pre-filtered. `view` lives in the URL, so clicking
+  // a card while already on this page still applies it.
+  const view = QUICK_FILTERS.some((q) => q.value === searchParams.get('view')) ? searchParams.get('view') : 'all'
+  const setView = (v) => setSearchParams((prev) => {
+    const next = new URLSearchParams(prev)
+    if (v === 'all') next.delete('view')
+    else next.set('view', v)
+    return next
+  }, { replace: true })
+
+  const [filters, setFilters]   = useState({ ...NO_FILTERS, status: searchParams.get('status') || '' })
   const [showModal, setShowModal] = useState(false)
   const [form, setForm]           = useState(EMPTY)
   const [formError, setFormError] = useState('')
   const search = useDebounce(filters.search)
 
-  const params = {}
+  const params = { ...quickFilterParams(view) }
   if (filters.websiteId) params.websiteId = filters.websiteId
   if (filters.status)    params.status    = filters.status
   if (filters.priority)  params.priority  = filters.priority
   if (filters.category)  params.category  = filters.category
   if (search)            params.search    = search
+  if (filters.dueFrom)   params.dueFrom   = filters.dueFrom
+  if (filters.dueTo)     params.dueTo     = filters.dueTo
 
-  const { data: tasks = [], isPending: loading } = useTasks(params)
+  const { data: tasks = [], isPending: loading, isFetching } = useTasks(params)
   const { data: websites = [] } = useWebsites()
-  const { data: allUsers = [] } = useUsers({}, { enabled: canCreate })
+  // /members is readable by every role that may create tasks (/users is admin-only)
+  const { data: allUsers = [] } = useMembers({ enabled: canCreate })
   const { data: projects = [] } = useProjects(form.websiteId)
 
   const invalidateTasks = () => queryClient.invalidateQueries({ queryKey: ['tasks'] })
@@ -74,20 +90,23 @@ export default function Tasks() {
 
   const handleSubmit = (e) => { e.preventDefault(); setFormError(''); addTask.mutate() }
 
-  const handleDelete = (task, e) => {
-    e.stopPropagation()
+  const handleDelete = (task) => {
     if (!confirm(`Delete "${task.title}"?`)) return
     removeTask.mutate(task)
   }
 
   const f   = (key) => (e) => setForm((p) => ({ ...p, [key]: e.target.value }))
   const sf  = (key) => (e) => setFilters((p) => ({ ...p, [key]: e.target.value }))
-  const isOverdue = (d) => d && new Date(d) < new Date()
+  const hasFilters = view !== 'all' || Object.values(filters).some(Boolean)
+  const clearFilters = () => { setFilters(NO_FILTERS); setView('all') }
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500">{tasks.length} task{tasks.length !== 1 ? 's' : ''}</p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-gray-500">
+          {loading ? 'Loading…' : `${tasks.length} task${tasks.length !== 1 ? 's' : ''}`}
+          {hasFilters && <button onClick={clearFilters} className="ml-3 text-blue-600 hover:underline">Clear filters</button>}
+        </p>
         {canCreate && (
           <button onClick={openModal} className="btn-primary flex items-center gap-2">
             <Plus className="w-4 h-4" /> Add Task
@@ -97,8 +116,9 @@ export default function Tasks() {
 
       {/* Filters */}
       <div className="card p-4 space-y-3">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <div className="md:col-span-2 relative">
+        <QuickFilters value={view} onChange={setView} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="sm:col-span-2 lg:col-span-2 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
             <input type="text" placeholder="Search tasks…" value={filters.search} onChange={sf('search')} className="input-field pl-9" />
           </div>
@@ -114,6 +134,16 @@ export default function Tasks() {
             <option value="">All Priorities</option>
             {Object.entries(PRIORITY_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:max-w-xl">
+          <label className="flex items-center gap-2 text-xs text-gray-500">
+            <span className="w-14 flex-shrink-0">Due from</span>
+            <input type="date" value={filters.dueFrom} onChange={sf('dueFrom')} className="input-field" />
+          </label>
+          <label className="flex items-center gap-2 text-xs text-gray-500">
+            <span className="w-14 flex-shrink-0">Due to</span>
+            <input type="date" value={filters.dueTo} min={filters.dueFrom || undefined} onChange={sf('dueTo')} className="input-field" />
+          </label>
         </div>
         <div className="flex flex-wrap gap-2">
           {CATEGORIES.map(({ value, label }) => (
@@ -134,49 +164,13 @@ export default function Tasks() {
       {loading ? (
         <div className="space-y-2">{[1,2,3,4].map((i) => <div key={i} className="card h-16 animate-pulse bg-gray-100" />)}</div>
       ) : tasks.length === 0 ? (
-        <div className="card p-12 text-center">
-          <CheckSquare className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500 font-medium">No tasks found</p>
-          <p className="text-sm text-gray-400 mt-1">Try adjusting your filters or add a new task.</p>
+        <div className="card">
+          <EmptyState icon={CheckSquare} title="No tasks found"
+            message={hasFilters ? 'Try adjusting or clearing your filters.' : canCreate ? 'Add a task to get started.' : 'No tasks are assigned to you yet.'} />
         </div>
       ) : (
-        <div className="card divide-y divide-gray-100">
-          {tasks.map((t) => (
-            <div key={t.id} onClick={() => navigate(`/tasks/${t.id}`)}
-              className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 cursor-pointer group">
-              <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${PRIORITY_DOT[t.priority] || 'bg-gray-300'}`} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-600">{t.title}</p>
-                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                  {t.website && <span className="text-xs text-gray-400">{t.website.name}</span>}
-                  {t.project && <><span className="text-xs text-gray-300">·</span><span className="text-xs text-gray-400">{t.project.name}</span></>}
-                  {t.targetKeywords && <><span className="text-xs text-gray-300">·</span><span className="text-xs text-gray-400 italic truncate max-w-[120px]">{t.targetKeywords}</span></>}
-                </div>
-              </div>
-              <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[t.category] || 'bg-gray-100 text-gray-600'}`}>
-                  {categoryLabel(t.category)}
-                </span>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[t.status] || 'bg-gray-100 text-gray-600'}`}>
-                  {STATUS_LABELS[t.status] || t.status}
-                </span>
-              </div>
-              <div className="hidden md:flex flex-col items-end gap-0.5 flex-shrink-0 w-28">
-                {t.assignee && <span className="text-xs text-gray-500 truncate w-full text-right">{t.assignee.name}</span>}
-                {t.dueDate && (
-                  <span className={`text-xs ${isOverdue(t.dueDate) ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
-                    {new Date(t.dueDate).toLocaleDateString()}
-                  </span>
-                )}
-              </div>
-              {isAdmin && (
-                <button onClick={(e) => handleDelete(t, e)}
-                  className="p-1.5 rounded hover:bg-red-50 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-          ))}
+        <div className={`card overflow-hidden ${isFetching ? 'opacity-60 transition-opacity' : ''}`}>
+          <TaskTable tasks={tasks} onDelete={isAdmin ? handleDelete : undefined} />
         </div>
       )}
 

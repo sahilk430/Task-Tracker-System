@@ -9,6 +9,8 @@ import WebsiteDetail from './pages/WebsiteDetail'
 import Tasks from './pages/Tasks'
 import TaskDetail from './pages/TaskDetail'
 import Reports from './pages/Reports'
+import Members from './pages/Members'
+import MemberDetail from './pages/MemberDetail'
 
 export default function App() {
   return (
@@ -20,6 +22,8 @@ export default function App() {
           <Route element={<Layout />}>
             <Route path="/dashboard"        element={<Dashboard />} />
             <Route path="/users"            element={<Users />} />
+            <Route path="/members"          element={<Members />} />
+            <Route path="/members/:id"      element={<MemberDetail />} />
             <Route path="/websites"         element={<Websites />} />
             <Route path="/websites/:id"     element={<WebsiteDetail />} />
             <Route path="/tasks"            element={<Tasks />} />

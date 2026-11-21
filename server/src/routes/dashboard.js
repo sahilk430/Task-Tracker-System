@@ -16,9 +16,10 @@ function tallyTasks(tasks) {
   return tally
 }
 
-// Assigned vs done counts per assignee, busiest first
+// Assigned vs done counts per assignee, busiest first (cancelled tasks don't count as workload)
 async function getTeamWorkload() {
   const groups = await Task.aggregate([
+    { $match: { status: { $ne: 'cancelled' } } },
     { $group: {
       _id:      '$assignee',
       assigned: { $sum: 1 },

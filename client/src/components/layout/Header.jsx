@@ -1,18 +1,25 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { LogOut, ChevronDown } from 'lucide-react'
+import { LogOut, ChevronDown, Menu } from 'lucide-react'
+import Avatar from '../ui/Avatar'
 import { useUser, useLogout } from '../../hooks/useAuth'
 import { ROLE_LABELS } from '../../utils/constants'
 
 const PAGE_TITLES = {
   '/dashboard': 'Dashboard',
-  '/users':     'Team Management',
+  '/users':     'Manage Users',
+  '/members':   'Team Members',
   '/websites':  'Websites',
   '/tasks':     'Tasks',
   '/reports':   'Reports',
 }
 
-export default function Header() {
+// Detail pages (/tasks/:id, /members/:id, …) fall back to their section title
+const DETAIL_TITLES = { members: 'Member Dashboard', tasks: 'Task Details', websites: 'Website Details' }
+const pageTitle = (pathname) =>
+  PAGE_TITLES[pathname] || DETAIL_TITLES[pathname.split('/')[1]] || 'SEO Tracker'
+
+export default function Header({ onMenuClick }) {
   const [open, setOpen] = useState(false)
   const user      = useUser()
   const logout    = useLogout()
@@ -22,19 +29,20 @@ export default function Header() {
   const handleLogout = () => { logout(); navigate('/login') }
 
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
-      <h1 className="text-lg font-semibold text-gray-900">
-        {PAGE_TITLES[location.pathname] || 'SEO Tracker'}
-      </h1>
+    <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 flex-shrink-0">
+      <div className="flex items-center gap-2 min-w-0">
+        <button onClick={onMenuClick} className="lg:hidden p-2 -ml-2 rounded-lg hover:bg-gray-100" aria-label="Open menu">
+          <Menu className="w-5 h-5 text-gray-600" />
+        </button>
+        <h1 className="text-lg font-semibold text-gray-900 truncate">{pageTitle(location.pathname)}</h1>
+      </div>
 
       <div className="relative">
         <button
           onClick={() => setOpen(!open)}
           className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
         >
-          <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
-            {user?.name?.charAt(0).toUpperCase()}
-          </div>
+          <Avatar name={user?.name} src={user?.avatarUrl} size="sm" />
           <div className="text-left hidden sm:block">
             <p className="text-sm font-medium text-gray-900 leading-tight">{user?.name}</p>
             <p className="text-xs text-gray-500">{ROLE_LABELS[user?.role]}</p>

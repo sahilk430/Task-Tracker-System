@@ -69,8 +69,9 @@ export default function TaskDetail() {
 
   const changeStatus = useMutation({
     mutationFn: (newStatus) => updateTask(id, { status: newStatus }),
-    onSuccess:  (_, newStatus) => {
-      queryClient.setQueryData(['tasks', 'detail', id], (prev) => prev && { ...prev, status: newStatus })
+    // The response carries the server-set completedAt as well as the new status
+    onSuccess:  ({ data }) => {
+      queryClient.setQueryData(['tasks', 'detail', id], data.task)
       queryClient.invalidateQueries({ queryKey: ['tasks', 'detail', id, 'activity'] })
       queryClient.invalidateQueries({ queryKey: ['tasks', 'list'] })
     },

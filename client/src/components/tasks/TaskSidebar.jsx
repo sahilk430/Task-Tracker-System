@@ -1,13 +1,14 @@
 import { Calendar, Clock } from 'lucide-react'
-import { useWebsites, useProjects, useUsers } from '../../hooks/queries'
-import { PRIORITY_LABELS, CATEGORIES, categoryLabel } from '../../utils/constants'
+import { useWebsites, useProjects, useMembers } from '../../hooks/queries'
+import { PRIORITY_LABELS, CATEGORIES, categoryLabel, isTaskOverdue } from '../../utils/constants'
 import { fmtDate } from '../../utils/format'
 
 // Details / Dates / Hours cards. `canManage` unlocks priority, assignee, website and project edits.
 export default function TaskSidebar({ task, editing, form, f, canManage }) {
   // Dropdown options are only needed while editing
   const { data: websites = [] } = useWebsites({ enabled: editing && canManage })
-  const { data: allUsers = [] } = useUsers({}, { enabled: editing && canManage })
+  // /members (not the admin-only /users) so marketing managers can reassign too
+  const { data: allUsers = [] } = useMembers({ enabled: editing && canManage })
   const { data: projects = [] } = useProjects(editing && canManage ? form.websiteId : null)
 
   return (
@@ -84,9 +85,12 @@ export default function TaskSidebar({ task, editing, form, f, canManage }) {
           <dl className="space-y-2">
             <div className="flex items-center justify-between"><dt className="text-xs text-gray-400">Start</dt><dd className="text-sm text-gray-700">{fmtDate(task.startDate)}</dd></div>
             <div className="flex items-center justify-between"><dt className="text-xs text-gray-400">Due</dt>
-              <dd className={`text-sm font-medium ${task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done' ? 'text-red-500' : 'text-gray-700'}`}>{fmtDate(task.dueDate)}</dd>
+              <dd className={`text-sm font-medium ${isTaskOverdue(task) ? 'text-red-500' : 'text-gray-700'}`}>{fmtDate(task.dueDate)}</dd>
             </div>
             <div className="flex items-center justify-between"><dt className="text-xs text-gray-400">Created</dt><dd className="text-sm text-gray-700">{fmtDate(task.createdAt)}</dd></div>
+            {task.completedAt && (
+              <div className="flex items-center justify-between"><dt className="text-xs text-gray-400">Completed</dt><dd className="text-sm text-gray-700">{fmtDate(task.completedAt)}</dd></div>
+            )}
           </dl>
         )}
       </div>

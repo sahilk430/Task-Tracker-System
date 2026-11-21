@@ -14,7 +14,7 @@ const router = express.Router()
 const POPULATE = [
   { path: 'website',  select: 'name domain' },
   { path: 'project',  select: 'name' },
-  { path: 'assignee', select: 'name email role' },
+  { path: 'assignee', select: 'name email role avatarUrl' },
   { path: 'creator',  select: 'name' },
 ]
 const COUNTS = { comments: [TaskComment, 'task'] }

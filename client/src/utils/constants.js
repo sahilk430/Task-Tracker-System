@@ -93,3 +93,36 @@ export const WEBSITE_STATUS_BADGE = {
   completed: 'bg-blue-100 text-blue-700',
   archived:  'bg-gray-100 text-gray-500',
 }
+
+// Summary groups over the real status values (mirrors server STATUS_GROUPS).
+// `cancelled` belongs to none and is excluded from totals and completion %.
+export const STATUS_GROUPS = {
+  pending:    ['backlog', 'todo'],
+  inProgress: ['in_progress', 'in_review'],
+  completed:  ['done'],
+}
+
+// Overdue is derived, never a stored status: due date passed and not done / cancelled
+export const isTaskOverdue = (task, now = new Date()) =>
+  !!task?.dueDate && new Date(task.dueDate) < now && !['done', 'cancelled'].includes(task.status)
+
+// Quick filters shared by the Dashboard and Tasks pages → /api/tasks params
+export const QUICK_FILTERS = [
+  { value: 'all',        label: 'All Tasks',   params: {} },
+  { value: 'mine',       label: 'My Tasks',    params: { mine: 'true' } },
+  { value: 'pending',    label: 'Pending',     params: { statusGroup: 'pending' } },
+  { value: 'inProgress', label: 'In Progress', params: { statusGroup: 'inProgress' } },
+  { value: 'completed',  label: 'Completed',   params: { statusGroup: 'completed' } },
+  { value: 'overdue',    label: 'Overdue',     params: { overdue: 'true' } },
+]
+export const quickFilterParams = (value) =>
+  (QUICK_FILTERS.find((q) => q.value === value) || QUICK_FILTERS[0]).params
+
+// Bar colours for status / priority breakdown charts
+export const TASK_STATUS_BAR_COLORS = {
+  backlog: 'bg-gray-400', todo: 'bg-blue-400', in_progress: 'bg-yellow-400',
+  in_review: 'bg-purple-400', done: 'bg-green-500', cancelled: 'bg-red-300',
+}
+export const PRIORITY_BAR_COLORS = {
+  critical: 'bg-red-500', high: 'bg-orange-400', medium: 'bg-yellow-400', low: 'bg-green-400',
+}

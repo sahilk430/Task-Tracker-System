@@ -1,6 +1,7 @@
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { getStats } from '../api/dashboard'
 import { getUsers } from '../api/users'
+import { getMembers, getMember } from '../api/members'
 import { getWebsites, getWebsite } from '../api/websites'
 import { getProjects } from '../api/projects'
 import { getTasks, getTask, getComments, getActivity } from '../api/tasks'
@@ -35,10 +36,11 @@ export const useProjects = (websiteId) => useQuery({
   enabled:  !!websiteId,
 })
 
-export const useTasks = (params = {}) => useQuery({
+export const useTasks = (params = {}, options = {}) => useQuery({
   queryKey: ['tasks', 'list', params],
   queryFn:  () => getTasks(params).then(({ data }) => data.tasks),
   placeholderData: keepPreviousData,
+  ...options,
 })
 
 export const useTask = (id) => useQuery({
@@ -65,4 +67,19 @@ export const useWebsiteReport = (options = {}) => useQuery({
   queryKey: ['reports', 'websites'],
   queryFn:  () => getWebsiteReport().then(({ data }) => data.websites),
   ...options,
+})
+
+// Team members (existing users) with task summaries
+export const useMembers = (options = {}) => useQuery({
+  queryKey: ['members', 'list'],
+  queryFn:  () => getMembers().then(({ data }) => data.members),
+  ...options,
+})
+
+export const useMember = (id) => useQuery({
+  queryKey: ['members', 'detail', id],
+  queryFn:  () => getMember(id).then(({ data }) => data),
+  enabled:  !!id,
+  // 403 / 404 are final answers — only retry network / server errors
+  retry:    (count, err) => count < 1 && (!err.response || err.response.status >= 500),
 })
