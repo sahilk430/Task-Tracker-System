@@ -10,6 +10,11 @@ const userSchema = new Schema({
   role:         { type: String, enum: VALID_ROLES, default: 'seo_executive' },
   avatarUrl:    String,
   isActive:     { type: Boolean, default: true },
+  // Bumped on password reset / admin password change — tokens carrying an older value are rejected
+  tokenVersion:      { type: Number, default: 0, select: false },
+  // Password reset: only the SHA-256 of the emailed token is stored
+  resetTokenHash:    { type: String, select: false },
+  resetTokenExpires: { type: Date, select: false },
 }, {
   ...schemaOptions,
   // Never serialise the hash, even when it was explicitly selected (login)
@@ -18,6 +23,9 @@ const userSchema = new Schema({
     transform: (doc, ret) => {
       toJSON.transform(doc, ret)
       delete ret.passwordHash
+      delete ret.tokenVersion
+      delete ret.resetTokenHash
+      delete ret.resetTokenExpires
       return ret
     },
   },

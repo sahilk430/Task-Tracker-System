@@ -2,9 +2,22 @@ const fs = require('fs')
 const path = require('path')
 const express = require('express')
 const cors = require('cors')
+const helmet = require('helmet')
 const { notFound, errorHandler } = require('./middleware/errorHandler')
+const { apiLimiter } = require('./middleware/rateLimit')
 
 const app = express()
+
+// Render / Vercel sit behind one proxy hop — needed for the real client IP in rate limits
+app.set('trust proxy', 1)
+
+// Security headers. Images may come from https avatar URLs and blob: previews.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: { 'img-src': ["'self'", 'data:', 'blob:', 'https:'] },
+  },
+  crossOriginEmbedderPolicy: false,
+}))
 
 // CLIENT_URL may list several origins, comma-separated (e.g. localhost + Vercel)
 const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
@@ -13,6 +26,7 @@ const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
   .filter(Boolean)
 
 app.use(cors({ origin: allowedOrigins, credentials: true }))
+app.use('/api', apiLimiter)
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
@@ -24,6 +38,7 @@ app.use('/api/projects',  require('./routes/projects'))
 app.use('/api/tasks',     require('./routes/tasks'))
 app.use('/api/dashboard', require('./routes/dashboard'))
 app.use('/api/reports',   require('./routes/reports'))
+app.use('/api/notifications', require('./routes/notifications'))
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'SEO Task Tracker API is running' })

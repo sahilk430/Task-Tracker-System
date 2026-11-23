@@ -10,6 +10,15 @@ const errorHandler = (err, req, res, next) => {
   if (err instanceof HttpError) {
     return res.status(err.status).json({ message: err.message })
   }
+  // Upload errors from multer (file too large, too many files, …)
+  if (err.name === 'MulterError') {
+    const tooLarge = err.code === 'LIMIT_FILE_SIZE'
+    return res.status(tooLarge ? 413 : 400).json({ message: tooLarge ? 'File is too large (max 10 MB).' : 'Invalid upload.' })
+  }
+  // Malformed JSON body
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json({ message: 'Invalid JSON body.' })
+  }
   // Malformed values — on queries a CastError is thrown directly, on save() it is wrapped
   // in a ValidationError. Model path names mean nothing to the client, so ids get a generic message.
   const cause = err.name === 'ValidationError' ? Object.values(err.errors)[0] : err

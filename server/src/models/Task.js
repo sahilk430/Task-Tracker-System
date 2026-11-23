@@ -5,6 +5,14 @@ const {
 const { schemaOptions, ref } = require('./schemaOptions')
 const { pick } = require('../utils/parse')
 
+// Sub-steps of a task. Edited through /api/tasks/:id/checklist, never through PUT /api/tasks/:id.
+const checklistItemSchema = new Schema({
+  text:   { type: String, required: true, trim: true, maxlength: 200 },
+  done:   { type: Boolean, default: false },
+  doneAt: { type: Date, default: null },
+  doneBy: ref('User', { default: null }),
+}, { toJSON: { virtuals: true, versionKey: false, transform: (doc, ret) => { delete ret._id; return ret } } })
+
 const taskSchema = new Schema({
   title:          { type: String, required: true, trim: true },
   description:    String,
@@ -37,6 +45,8 @@ const taskSchema = new Schema({
   backlinksCount:       Number,
   toolsUsed:            String,
   tags:                 String,
+
+  checklist: { type: [checklistItemSchema], default: [] },
 }, schemaOptions)
 
 // "My tasks" list: filtered by assignee, newest first

@@ -5,4 +5,6 @@ module.exports = {
   Task:         require('./Task'),
   TaskComment:  require('./TaskComment'),
   TaskActivity: require('./TaskActivity'),
+  Notification: require('./Notification'),
+  Attachment:   require('./Attachment'),
 }

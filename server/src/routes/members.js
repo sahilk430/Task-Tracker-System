@@ -5,6 +5,7 @@ const { canManageAll } = require('../middleware/roleCheck')
 const { CLOSED_TASK_STATUSES, TASK_STATUSES, TASK_PRIORITIES } = require('../config/constants')
 const { HttpError, orNotFound } = require('../utils/httpError')
 const { taskSummaryByAssignee, summaryFor, recentActivity } = require('../utils/taskStats')
+const { completionTrends } = require('../utils/trends')
 
 const router = express.Router()
 
@@ -27,6 +28,16 @@ router.get('/', authenticate, async (req, res) => {
   const stats  = await taskSummaryByAssignee(users.map((u) => u._id))
 
   res.json({ members: users.map((u) => ({ ...u.toJSON(), stats: summaryFor(stats, u.id) })) })
+})
+
+// GET /api/members/trends?weeks=8&member=<id>
+// Completed per week, on-time rate and average days to finish. Managers see the whole team
+// (or one member); everyone else only themselves.
+router.get('/trends', authenticate, async (req, res) => {
+  const member = typeof req.query.member === 'string' && req.query.member ? req.query.member : null
+  if (member && !canViewMember(req.user, member)) throw new HttpError(403, 'Access denied.')
+  const memberIds = member ? [member] : canManageAll(req.user) ? null : [req.user.id]
+  res.json(await completionTrends({ weeks: req.query.weeks, memberIds }))
 })
 
 // GET /api/members/:id — member dashboard data

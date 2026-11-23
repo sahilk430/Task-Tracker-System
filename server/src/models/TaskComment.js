@@ -6,6 +6,8 @@ const taskCommentSchema = new Schema({
   user:     ref('User', { required: true }),
   body:     { type: String, required: true, trim: true },
   isEdited: { type: Boolean, default: false },
+  // Users @mentioned in the comment (validated against who can see the task)
+  mentions: [ref('User')],
 }, schemaOptions)
 
 // Comments are always listed per task, oldest first

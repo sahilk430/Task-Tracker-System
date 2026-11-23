@@ -1,6 +1,7 @@
 require('dotenv').config()
 const app = require('./app')
 const { connectDB } = require('./config/db')
+const { startReminders } = require('./utils/reminders')
 
 const REQUIRED_ENV = ['MONGODB_URI', 'JWT_SECRET']
 const PORT = process.env.PORT || 5001
@@ -14,6 +15,8 @@ async function start() {
 
   await connectDB(process.env.MONGODB_URI)
   app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`))
+  // Due-date reminders and daily digests (long-running server only; Vercel has no background jobs)
+  startReminders()
 }
 
 start().catch((err) => {

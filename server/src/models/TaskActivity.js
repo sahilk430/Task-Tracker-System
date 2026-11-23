@@ -1,7 +1,7 @@
 const { Schema, model } = require('mongoose')
 const { schemaOptions, ref } = require('./schemaOptions')
 
-// Audit log entry: created | status_changed | priority_changed | reassigned | commented
+// Audit log entry: created | status_changed | priority_changed | reassigned | commented | attached
 const taskActivitySchema = new Schema({
   task:      ref('Task', { required: true }),
   user:      ref('User', { required: true }),

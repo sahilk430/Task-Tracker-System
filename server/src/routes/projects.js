@@ -8,6 +8,8 @@ const { ADMIN_ROLES } = require('../config/constants')
 const { HttpError, orNotFound } = require('../utils/httpError')
 const { pick } = require('../utils/parse')
 const { withCounts } = require('../utils/countBy')
+const { countIf } = require('../utils/taskStats')
+const { CLOSED_TASK_STATUSES } = require('../config/constants')
 
 const router = express.Router()
 
@@ -26,6 +28,28 @@ async function assertWebsiteAccess(user, websiteId) {
   }
 }
 
+// Task progress per project: { [projectId]: { total, completed, overdue, completionRate } }
+// (cancelled tasks don't count, overdue = due date passed and not done / cancelled)
+async function projectProgress(projectIds, now = new Date()) {
+  const groups = await Task.aggregate([
+    { $match: { project: { $in: projectIds }, status: { $ne: 'cancelled' } } },
+    { $group: {
+      _id: '$project',
+      total:     { $sum: 1 },
+      completed: countIf({ $eq: ['$status', 'done'] }),
+      overdue:   countIf({ $and: [
+        { $eq: [{ $type: '$dueDate' }, 'date'] },
+        { $lt: ['$dueDate', now] },
+        { $not: [{ $in: ['$status', CLOSED_TASK_STATUSES] }] },
+      ] }),
+    } },
+  ])
+  return Object.fromEntries(groups.map(({ _id, ...g }) => [
+    _id.toString(), { ...g, completionRate: g.total ? Math.round((g.completed / g.total) * 100) : 0 },
+  ]))
+}
+const EMPTY_PROGRESS = { total: 0, completed: 0, overdue: 0, completionRate: 0 }
+
 // GET /api/projects?websiteId=xxx
 router.get('/', authenticate, async (req, res) => {
   const { websiteId } = req.query
@@ -33,7 +57,9 @@ router.get('/', authenticate, async (req, res) => {
   await assertWebsiteAccess(req.user, websiteId)
 
   const projects = await Project.find({ website: websiteId }).populate(POPULATE).sort({ createdAt: -1 })
-  res.json({ projects: await withCounts(projects, COUNTS) })
+  const progress = await projectProgress(projects.map((p) => p._id))
+  const list = await withCounts(projects, COUNTS)
+  res.json({ projects: list.map((p) => ({ ...p, progress: progress[p.id] || EMPTY_PROGRESS })) })
 })
 
 // GET /api/projects/:id

@@ -31,7 +31,29 @@ const STATUS_GROUPS = {
 // Every status that counts towards a member's workload
 const COUNTED_TASK_STATUSES = Object.values(STATUS_GROUPS).flat()
 
+// In-app notification kinds (see utils/notify.js)
+const NOTIFICATION_TYPES = ['assigned', 'status', 'comment', 'mention', 'due_soon', 'overdue', 'digest']
+
+// Uploads (task attachments)
+const ATTACHMENT_MAX_BYTES    = 10 * 1024 * 1024
+const ATTACHMENTS_PER_TASK    = 20
+const ATTACHMENT_ALLOWED_TYPES = [
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+  'application/pdf', 'text/plain', 'text/csv',
+  'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/zip', 'application/x-zip-compressed',
+]
+
+const CHECKLIST_MAX_ITEMS = 50
+
 module.exports = {
+  NOTIFICATION_TYPES,
+  ATTACHMENT_MAX_BYTES,
+  ATTACHMENTS_PER_TASK,
+  ATTACHMENT_ALLOWED_TYPES,
+  CHECKLIST_MAX_ITEMS,
   VALID_ROLES,
   ADMIN_ROLES,
   MANAGEMENT_ROLES,
