@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { UserPlus, Search, Edit2, ToggleLeft, ToggleRight } from 'lucide-react'
-import { createUser, updateUser, toggleUserActive } from '../api/users'
+import { UserPlus, Search, Edit2, ToggleLeft, ToggleRight, KeyRound, Copy, Check } from 'lucide-react'
+import { createUser, updateUser, toggleUserActive, createResetLink } from '../api/users'
 import { useUsers } from '../hooks/queries'
 import { useDebounce } from '../hooks/useDebounce'
 import Modal from '../components/ui/Modal'
 import FormError from '../components/ui/FormError'
 import { ROLE_LABELS, ROLE_BADGE_COLORS, VALID_ROLES } from '../utils/constants'
 import { fmtDateLong } from '../utils/format'
+import { passwordProblem, PASSWORD_HINT } from '../utils/password'
 
 const EMPTY_FORM = { name: '', email: '', password: '', role: 'seo_executive' }
 
@@ -19,6 +20,8 @@ export default function Users() {
   const [editing, setEditing]       = useState(null)
   const [form, setForm]             = useState(EMPTY_FORM)
   const [formError, setFormError]   = useState('')
+  const [resetFor, setResetFor]     = useState(null)   // { user, link, expiresInMinutes } | { user, error }
+  const [copied, setCopied]         = useState(false)
 
   const debouncedSearch = useDebounce(search)
 
@@ -50,7 +53,22 @@ export default function Users() {
     onSuccess:  invalidateUsers,
   })
 
-  const handleSubmit = (e) => { e.preventDefault(); setFormError(''); saveUser.mutate() }
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    const problem = (!editing || form.password) ? passwordProblem(form.password) : ''
+    setFormError(problem)
+    if (!problem) saveUser.mutate()
+  }
+
+  const makeResetLink = useMutation({
+    mutationFn: (u) => createResetLink(u.id).then(({ data }) => data),
+    onMutate:   (u) => { setCopied(false); setResetFor({ user: u }) },
+    onSuccess:  (data, u) => setResetFor({ user: u, ...data }),
+    onError:    (err, u) => setResetFor({ user: u, error: err.response?.data?.message || 'Could not create a reset link.' }),
+  })
+  const copyLink = async () => {
+    try { await navigator.clipboard.writeText(resetFor.link); setCopied(true) } catch { setCopied(false) }
+  }
 
   const handleToggle = (u) => toggleActive.mutate(u)
 
@@ -122,6 +140,11 @@ export default function Users() {
                       <button onClick={() => openEdit(u)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-blue-600 transition-colors">
                         <Edit2 className="w-4 h-4" />
                       </button>
+                      <button onClick={() => makeResetLink.mutate(u)} disabled={!u.isActive}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-blue-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Create password reset link" aria-label={`Create password reset link for ${u.name}`}>
+                        <KeyRound className="w-4 h-4" />
+                      </button>
                       <button onClick={() => handleToggle(u)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
                         {u.isActive ? <ToggleRight className="w-4 h-4 text-green-600" /> : <ToggleLeft className="w-4 h-4 text-gray-400" />}
                       </button>
@@ -133,6 +156,32 @@ export default function Users() {
           </table>
         </div>
       </div>
+
+      {/* Reset link */}
+      {resetFor && (
+        <Modal title={`Password reset link — ${resetFor.user.name}`} onClose={() => setResetFor(null)} size="lg">
+          <div className="p-6 space-y-4">
+            {resetFor.error ? (
+              <FormError message={resetFor.error} />
+            ) : !resetFor.link ? (
+              <p className="text-sm text-gray-500">Creating link…</p>
+            ) : (
+              <>
+                <p className="text-sm text-gray-600">
+                  Send this link to {resetFor.user.name} privately. It works once and expires in {resetFor.expiresInMinutes} minutes.
+                  Their current sessions end when they set the new password.
+                </p>
+                <div className="flex gap-2">
+                  <input readOnly value={resetFor.link} onFocus={(e) => e.target.select()} className="input-field font-mono text-xs" aria-label="Reset link" />
+                  <button onClick={copyLink} className="btn-primary flex items-center gap-1.5 whitespace-nowrap">
+                    {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />} {copied ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </Modal>
+      )}
 
       {/* Modal */}
       {showModal && (
@@ -152,7 +201,8 @@ export default function Users() {
                 Password {editing && <span className="text-gray-400 font-normal">(leave blank to keep current)</span>}
               </label>
               <input type="password" value={form.password} onChange={(e) => setForm(f => ({...f, password: e.target.value}))}
-                className="input-field" minLength={6} required={!editing} placeholder={editing ? '••••••' : ''} />
+                className="input-field" minLength={8} required={!editing} placeholder={editing ? '••••••' : ''} autoComplete="new-password" />
+              <p className="text-xs text-gray-500 mt-1">{PASSWORD_HINT}</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>

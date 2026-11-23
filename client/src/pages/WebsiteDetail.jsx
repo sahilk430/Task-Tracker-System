@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Plus, Globe, Users, FolderOpen, Trash2, UserPlus, UserMinus, ExternalLink } from 'lucide-react'
 import { addWebsiteMember, removeWebsiteMember } from '../api/websites'
@@ -8,6 +8,7 @@ import { useWebsite, useProjects, useUsers } from '../hooks/queries'
 import { useUser } from '../hooks/useAuth'
 import Modal from '../components/ui/Modal'
 import FormError from '../components/ui/FormError'
+import ProgressBar from '../components/ui/ProgressBar'
 import { ADMIN_ROLES, ROLE_LABELS, ROLE_BADGE_COLORS, WEBSITE_STATUS_BADGE } from '../utils/constants'
 
 const PROJ_EMPTY = { name: '', goal: '', startDate: '', endDate: '', status: 'active' }
@@ -210,11 +211,23 @@ export default function WebsiteDetail() {
                     </div>
                   </div>
                   {p.goal && <p className="text-sm text-gray-500 mb-3 line-clamp-2">{p.goal}</p>}
-                  <div className="flex items-center justify-between text-xs text-gray-500">
-                    <span>{p._count?.tasks || 0} tasks</span>
-                    {p.endDate && (
-                      <span>Due {new Date(p.endDate).toLocaleDateString()}</span>
-                    )}
+                  {p.progress?.total > 0 && (
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="text-gray-500">{p.progress.completed} of {p.progress.total} done</span>
+                        <span className="font-medium text-gray-700">{p.progress.completionRate}%</span>
+                      </div>
+                      <ProgressBar value={p.progress.completionRate} />
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-2 text-xs text-gray-500">
+                    <Link to={`/tasks?projectId=${p.id}`} className="text-blue-600 hover:underline">
+                      {p._count?.tasks ? 'View tasks →' : 'No tasks yet'}
+                    </Link>
+                    <span className="flex items-center gap-2">
+                      {p.progress?.overdue > 0 && <span className="text-red-600 font-medium">{p.progress.overdue} overdue</span>}
+                      {p.endDate && <span>Due {new Date(p.endDate).toLocaleDateString()}</span>}
+                    </span>
                   </div>
                 </div>
               ))}

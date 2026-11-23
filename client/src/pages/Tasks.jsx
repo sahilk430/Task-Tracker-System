@@ -11,11 +11,12 @@ import FormError from '../components/ui/FormError'
 import EmptyState from '../components/ui/EmptyState'
 import QuickFilters from '../components/tasks/QuickFilters'
 import TaskTable from '../components/tasks/TaskTable'
+import AssigneeSelect from '../components/tasks/AssigneeSelect'
 import {
-  ADMIN_ROLES, STATUS_LABELS, PRIORITY_LABELS, ROLE_LABELS, CATEGORIES, QUICK_FILTERS, quickFilterParams,
+  ADMIN_ROLES, STATUS_LABELS, PRIORITY_LABELS, CATEGORIES, QUICK_FILTERS, quickFilterParams,
 } from '../utils/constants'
 
-const NO_FILTERS = { websiteId: '', status: '', priority: '', category: '', search: '', dueFrom: '', dueTo: '' }
+const NO_FILTERS = { websiteId: '', projectId: '', status: '', priority: '', category: '', search: '', dueFrom: '', dueTo: '' }
 
 const EMPTY = {
   title: '', description: '', websiteId: '', projectId: '', category: '',
@@ -43,7 +44,12 @@ export default function Tasks() {
     return next
   }, { replace: true })
 
-  const [filters, setFilters]   = useState({ ...NO_FILTERS, status: searchParams.get('status') || '' })
+  const [filters, setFilters]   = useState({
+    ...NO_FILTERS,
+    status:    searchParams.get('status') || '',
+    // ?projectId= comes from a project card on the website page (its website is implied)
+    projectId: searchParams.get('projectId') || '',
+  })
   const [showModal, setShowModal] = useState(false)
   const [form, setForm]           = useState(EMPTY)
   const [formError, setFormError] = useState('')
@@ -51,6 +57,7 @@ export default function Tasks() {
 
   const params = { ...quickFilterParams(view) }
   if (filters.websiteId) params.websiteId = filters.websiteId
+  if (filters.projectId) params.projectId = filters.projectId
   if (filters.status)    params.status    = filters.status
   if (filters.priority)  params.priority  = filters.priority
   if (filters.category)  params.category  = filters.category
@@ -98,13 +105,18 @@ export default function Tasks() {
   const f   = (key) => (e) => setForm((p) => ({ ...p, [key]: e.target.value }))
   const sf  = (key) => (e) => setFilters((p) => ({ ...p, [key]: e.target.value }))
   const hasFilters = view !== 'all' || Object.values(filters).some(Boolean)
-  const clearFilters = () => { setFilters(NO_FILTERS); setView('all') }
+  const clearFilters = () => {
+    setFilters(NO_FILTERS)
+    setSearchParams({}, { replace: true })
+  }
+  const projectName = filters.projectId && tasks.find((t) => t.project?.id === filters.projectId)?.project?.name
 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-gray-500">
           {loading ? 'Loading…' : `${tasks.length} task${tasks.length !== 1 ? 's' : ''}`}
+          {filters.projectId && <span className="ml-1">in project <span className="font-medium text-gray-700">{projectName || 'selected'}</span></span>}
           {hasFilters && <button onClick={clearFilters} className="ml-3 text-blue-600 hover:underline">Clear filters</button>}
         </p>
         {canCreate && (
@@ -230,12 +242,7 @@ export default function Tasks() {
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Assign To *</label>
-                  <select value={form.assignedTo} onChange={f('assignedTo')} className="input-field" required>
-                    <option value="">Select…</option>
-                    {allUsers.filter((u) => u.isActive).map((u) => (
-                      <option key={u.id} value={u.id}>{u.name} ({ROLE_LABELS[u.role] || u.role})</option>
-                    ))}
-                  </select>
+                  <AssigneeSelect members={allUsers} value={form.assignedTo} onChange={f('assignedTo')} required showRole />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>

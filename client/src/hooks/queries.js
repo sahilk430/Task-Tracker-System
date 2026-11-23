@@ -1,10 +1,11 @@
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { getStats } from '../api/dashboard'
 import { getUsers } from '../api/users'
-import { getMembers, getMember } from '../api/members'
+import { getMembers, getMember, getTrends } from '../api/members'
+import { getNotifications } from '../api/notifications'
 import { getWebsites, getWebsite } from '../api/websites'
 import { getProjects } from '../api/projects'
-import { getTasks, getTask, getComments, getActivity } from '../api/tasks'
+import { getTasks, getTask, getComments, getActivity, getParticipants, getAttachments } from '../api/tasks'
 import { getTaskReport, getWebsiteReport } from '../api/reports'
 
 export const useDashboardStats = () => useQuery({
@@ -82,4 +83,32 @@ export const useMember = (id) => useQuery({
   enabled:  !!id,
   // 403 / 404 are final answers — only retry network / server errors
   retry:    (count, err) => count < 1 && (!err.response || err.response.status >= 500),
+})
+
+// Completed-per-week, on-time rate, average days. `member` limits to one person.
+export const useTrends = (params = {}, options = {}) => useQuery({
+  queryKey: ['members', 'trends', params],
+  queryFn:  () => getTrends(params).then(({ data }) => data),
+  ...options,
+})
+
+// Own notifications, polled while the app is open
+export const useNotifications = () => useQuery({
+  queryKey: ['notifications'],
+  queryFn:  () => getNotifications().then(({ data }) => data),
+  refetchInterval: 60 * 1000,
+  refetchOnWindowFocus: true,
+})
+
+// People who can be @mentioned on a task
+export const useTaskParticipants = (id, options = {}) => useQuery({
+  queryKey: ['tasks', 'detail', id, 'participants'],
+  queryFn:  () => getParticipants(id).then(({ data }) => data.users),
+  staleTime: 5 * 60 * 1000,
+  ...options,
+})
+
+export const useTaskAttachments = (id) => useQuery({
+  queryKey: ['tasks', 'detail', id, 'attachments'],
+  queryFn:  () => getAttachments(id).then(({ data }) => data.attachments),
 })

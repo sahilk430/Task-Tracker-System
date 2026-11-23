@@ -1,9 +1,23 @@
 import { useNavigate } from 'react-router-dom'
-import { X } from 'lucide-react'
+import { X, ListChecks, Paperclip } from 'lucide-react'
 import Avatar from '../ui/Avatar'
 import { StatusBadge, PriorityBadge } from './StatusBadge'
 import { isTaskOverdue } from '../../utils/constants'
 import { fmtDate } from '../../utils/format'
+
+// Checklist progress and file count, shown under the title when present
+function TaskMeta({ task }) {
+  const steps = task.checklist?.length || 0
+  const done  = task.checklist?.filter((i) => i.done).length || 0
+  const files = task._count?.attachments || 0
+  if (!steps && !files) return null
+  return (
+    <span className="inline-flex items-center gap-2 text-[11px] text-gray-400 ml-1">
+      {steps > 0 && <span className={`inline-flex items-center gap-0.5 ${done === steps ? 'text-green-600' : ''}`}><ListChecks className="w-3 h-3" />{done}/{steps}</span>}
+      {files > 0 && <span className="inline-flex items-center gap-0.5"><Paperclip className="w-3 h-3" />{files}</span>}
+    </span>
+  )
+}
 
 // Task overview: a table on desktop / tablet, stacked cards on phones.
 // `hideAssignee` for lists already scoped to one person; `onDelete` shows a delete button.
@@ -33,7 +47,7 @@ export default function TaskTable({ tasks, hideAssignee = false, onDelete }) {
               <tr key={t.id} onClick={() => open(t)} className="hover:bg-gray-50 cursor-pointer group">
                 <td className="px-4 py-3 max-w-[18rem]">
                   <p className="font-medium text-gray-900 truncate group-hover:text-blue-600">{t.title}</p>
-                  {t.website && <p className="text-xs text-gray-400 truncate">{t.website.name}{t.project && ` · ${t.project.name}`}</p>}
+                  <p className="text-xs text-gray-400 truncate">{t.website?.name}{t.project && ` · ${t.project.name}`}<TaskMeta task={t} /></p>
                 </td>
                 {!hideAssignee && (
                   <td className="px-4 py-3">
@@ -74,6 +88,7 @@ export default function TaskTable({ tasks, hideAssignee = false, onDelete }) {
             <div className="mt-1.5 flex items-center gap-2 flex-wrap">
               <StatusBadge task={t} />
               {!hideAssignee && t.assignee && <span className="text-xs text-gray-500">{t.assignee.name}</span>}
+              <TaskMeta task={t} />
             </div>
             <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
               <div><dt className="text-gray-400">Start</dt><dd className="text-gray-600">{fmtDate(t.startDate)}</dd></div>

@@ -4,6 +4,7 @@ import { Search, Users } from 'lucide-react'
 import { useMembers } from '../hooks/queries'
 import { useUser } from '../hooks/useAuth'
 import MemberCard from '../components/members/MemberCard'
+import TeamTrends from '../components/members/TeamTrends'
 import EmptyState from '../components/ui/EmptyState'
 import { MANAGEMENT_ROLES, ROLE_LABELS } from '../utils/constants'
 
@@ -79,6 +80,8 @@ export default function Members() {
           {visible.map((m) => <MemberCard key={m.id} member={m} />)}
         </div>
       )}
+
+      <TeamTrends />
     </div>
   )
 }

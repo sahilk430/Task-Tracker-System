@@ -17,6 +17,7 @@ const DESCRIBE = {
   priority_changed: (a) => <>changed priority of {taskLink(a)} to {PRIORITY_LABELS[a.newValue] || a.newValue}</>,
   reassigned: (a) => <>reassigned {taskLink(a)}{a.newValueName && <> to {name(a.newValueName)}</>}</>,
   commented:  (a) => <>commented on {taskLink(a)}</>,
+  attached:   (a) => <>attached {a.newValue ? name(a.newValue) : 'a file'} to {taskLink(a)}</>,
 }
 
 const DOT = {

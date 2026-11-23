@@ -11,6 +11,8 @@ import TaskGscMetrics from '../components/tasks/TaskGscMetrics'
 import TaskResults from '../components/tasks/TaskResults'
 import TaskDiscussion from '../components/tasks/TaskDiscussion'
 import TaskSidebar from '../components/tasks/TaskSidebar'
+import TaskChecklist from '../components/tasks/TaskChecklist'
+import TaskAttachments from '../components/tasks/TaskAttachments'
 import {
   ADMIN_ROLES, STATUS_COLORS, STATUS_LABELS,
   PRIORITY_COLORS, PRIORITY_LABELS, categoryLabel,
@@ -178,6 +180,9 @@ export default function TaskDetail() {
             }
           </div>
 
+          {/* Checklist */}
+          {!editing && <TaskChecklist task={task} />}
+
           {/* SEO Details */}
           <TaskSeoDetails task={task} editing={editing} form={form} f={f} />
 
@@ -186,6 +191,9 @@ export default function TaskDetail() {
 
           {/* Results */}
           <TaskResults task={task} editing={editing} form={form} f={f} />
+
+          {/* Files */}
+          <TaskAttachments taskId={id} />
 
           {/* Comments + Activity */}
           <TaskDiscussion taskId={id} />

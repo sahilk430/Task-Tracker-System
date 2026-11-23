@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, Navigate } from 'react-router-dom'
+import { useNavigate, Navigate, Link } from 'react-router-dom'
 import { BarChart2, Eye, EyeOff } from 'lucide-react'
 import { useLogin } from '../hooks/useAuth'
 import { getToken } from '../api/token'
@@ -56,7 +56,10 @@ export default function Login() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-medium text-gray-700">Password</label>
+                <Link to="/forgot-password" className="text-xs text-blue-600 hover:underline">Forgot password?</Link>
+              </div>
               <div className="relative">
                 <input
                   type={showPw ? 'text' : 'password'} name="password" value={form.password}

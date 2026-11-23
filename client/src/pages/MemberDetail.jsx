@@ -12,6 +12,7 @@ import StatCard from '../components/dashboard/StatCard'
 import BarChart from '../components/dashboard/BarChart'
 import ActivityFeed from '../components/dashboard/ActivityFeed'
 import TaskTable from '../components/tasks/TaskTable'
+import TeamTrends from '../components/members/TeamTrends'
 import {
   MANAGEMENT_ROLES, ROLE_LABELS, STATUS_LABELS, PRIORITY_LABELS, TASK_STATUS_BAR_COLORS, PRIORITY_BAR_COLORS,
 } from '../utils/constants'
@@ -153,6 +154,8 @@ export default function MemberDetail() {
         <StatCard icon={AlertTriangle} label="Overdue"     value={stats.overdue}
           color={stats.overdue ? 'bg-red-500' : 'bg-gray-300'} onClick={() => setStatusFilter('overdue')} />
       </div>
+
+      <TeamTrends memberId={id} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="card p-5">

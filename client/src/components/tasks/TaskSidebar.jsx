@@ -2,6 +2,7 @@ import { Calendar, Clock } from 'lucide-react'
 import { useWebsites, useProjects, useMembers } from '../../hooks/queries'
 import { PRIORITY_LABELS, CATEGORIES, categoryLabel, isTaskOverdue } from '../../utils/constants'
 import { fmtDate } from '../../utils/format'
+import AssigneeSelect from './AssigneeSelect'
 
 // Details / Dates / Hours cards. `canManage` unlocks priority, assignee, website and project edits.
 export default function TaskSidebar({ task, editing, form, f, canManage }) {
@@ -31,9 +32,7 @@ export default function TaskSidebar({ task, editing, form, f, canManage }) {
                   </select>
                 </div>
                 <div><label className="block text-xs font-medium text-gray-500 mb-1">Assigned To</label>
-                  <select value={form.assignedTo} onChange={f('assignedTo')} className="input-field">
-                    {allUsers.filter((u) => u.isActive).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                  </select>
+                  <AssigneeSelect members={allUsers} value={form.assignedTo} onChange={f('assignedTo')} currentId={task.assignee?.id} />
                 </div>
                 <div><label className="block text-xs font-medium text-gray-500 mb-1">Website</label>
                   <select value={form.websiteId} onChange={f('websiteId')} className="input-field">

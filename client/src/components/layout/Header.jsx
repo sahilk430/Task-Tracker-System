@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { LogOut, ChevronDown, Menu } from 'lucide-react'
+import { LogOut, ChevronDown, Menu, Moon, Sun } from 'lucide-react'
 import Avatar from '../ui/Avatar'
+import NotificationBell from './NotificationBell'
 import { useUser, useLogout } from '../../hooks/useAuth'
+import { useTheme } from '../../hooks/useTheme'
 import { ROLE_LABELS } from '../../utils/constants'
 
 const PAGE_TITLES = {
@@ -25,6 +27,7 @@ export default function Header({ onMenuClick }) {
   const logout    = useLogout()
   const navigate  = useNavigate()
   const location  = useLocation()
+  const [theme, toggleTheme] = useTheme()
 
   const handleLogout = () => { logout(); navigate('/login') }
 
@@ -37,6 +40,12 @@ export default function Header({ onMenuClick }) {
         <h1 className="text-lg font-semibold text-gray-900 truncate">{pageTitle(location.pathname)}</h1>
       </div>
 
+      <div className="flex items-center gap-1 sm:gap-2">
+      <button onClick={toggleTheme} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
+        aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} title={theme === 'dark' ? 'Light mode' : 'Dark mode'}>
+        {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+      </button>
+      <NotificationBell />
       <div className="relative">
         <button
           onClick={() => setOpen(!open)}
@@ -68,6 +77,7 @@ export default function Header({ onMenuClick }) {
             </div>
           </>
         )}
+      </div>
       </div>
     </header>
   )

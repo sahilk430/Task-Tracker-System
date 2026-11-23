@@ -30,3 +30,101 @@
     @apply bg-white rounded-xl border border-gray-200 shadow-sm;
   }
 }
+
+/* ── Dark mode ────────────────────────────────────────────────────────
+   Toggled by the `dark` class on <html> (hooks/useTheme.js). The app is styled with
+   light Tailwind utilities, so dark mode remaps those utilities here in one place
+   instead of adding a dark: variant to every element. */
+.dark body { background-color: #0b1120; color: #f3f4f6; }
+.dark ::-webkit-scrollbar-track { background-color: #111827; }
+.dark ::-webkit-scrollbar-thumb { background-color: #374151; }
+
+.dark .card { background-color: #111827; border-color: #1f2937; }
+.dark .btn-secondary { background-color: #1f2937; border-color: #374151; color: #e5e7eb; }
+.dark .btn-secondary:hover { background-color: #273244; }
+.dark .input-field,
+.dark input:not([type=checkbox]):not([type=radio]):not([type=range]),
+.dark select,
+.dark textarea { background-color: #0f172a; border-color: #374151; color: #f3f4f6; }
+.dark .input-field::placeholder, .dark input::placeholder, .dark textarea::placeholder { color: #6b7280; }
+.dark input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8); }
+.dark .bg-gradient-to-br { background-image: none; background-color: #0b1120; }
+
+/* Neutrals */
+.dark .bg-white { background-color: #111827; }
+.dark .bg-gray-50 { background-color: #0b1120; }
+.dark .bg-gray-50\/60 { background-color: rgba(31, 41, 55, 0.5); }
+.dark .bg-gray-100 { background-color: #1f2937; }
+.dark .bg-gray-200 { background-color: #374151; }
+.dark .bg-gray-300 { background-color: #4b5563; }
+.dark .hover\:bg-gray-50:hover, .dark .active\:bg-gray-50:active { background-color: #1a2332; }
+.dark .hover\:bg-gray-100:hover { background-color: #1f2937; }
+.dark .hover\:bg-gray-200:hover { background-color: #374151; }
+.dark main .bg-gray-50 { background-color: #0f172a; }
+.dark .border-gray-50, .dark .border-gray-100 { border-color: #1f2937; }
+.dark .border-gray-200 { border-color: #263041; }
+.dark .border-gray-300, .dark .hover\:border-gray-300:hover { border-color: #374151; }
+.dark .divide-gray-50 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #1f2937; }
+.dark .text-gray-900 { color: #f3f4f6; }
+.dark .text-gray-800, .dark .hover\:text-gray-900:hover, .dark .hover\:text-gray-800:hover { color: #e5e7eb; }
+.dark .text-gray-700, .dark .hover\:text-gray-700:hover { color: #d1d5db; }
+.dark .text-gray-600, .dark .hover\:text-gray-600:hover { color: #b4bcc8; }
+.dark .text-gray-500 { color: #9ca3af; }
+.dark .text-gray-400 { color: #7b8494; }
+.dark .text-gray-300 { color: #4b5563; }
+
+.dark .bg-blue-50, .dark .hover\:bg-blue-50:hover { background-color: rgba(59, 130, 246, 0.12); }
+.dark .bg-blue-50\/40 { background-color: rgba(59, 130, 246, 0.08); }
+.dark .bg-blue-100 { background-color: rgba(59, 130, 246, 0.2); }
+.dark .border-blue-200 { border-color: rgba(59, 130, 246, 0.35); }
+.dark .text-blue-700, .dark .text-blue-800 { color: #93c5fd; }
+.dark .text-blue-600, .dark .text-blue-500, .dark .hover\:text-blue-600:hover, .dark .group:hover .group-hover\:text-blue-600 { color: #60a5fa; }
+.dark .bg-red-50, .dark .hover\:bg-red-50:hover { background-color: rgba(239, 68, 68, 0.12); }
+.dark .bg-red-50\/40 { background-color: rgba(239, 68, 68, 0.08); }
+.dark .bg-red-100 { background-color: rgba(239, 68, 68, 0.2); }
+.dark .border-red-200 { border-color: rgba(239, 68, 68, 0.35); }
+.dark .text-red-700, .dark .text-red-800 { color: #fca5a5; }
+.dark .text-red-600, .dark .text-red-500, .dark .hover\:text-red-600:hover, .dark .group:hover .group-hover\:text-red-600 { color: #f87171; }
+.dark .bg-green-50, .dark .hover\:bg-green-50:hover { background-color: rgba(34, 197, 94, 0.12); }
+.dark .bg-green-50\/40 { background-color: rgba(34, 197, 94, 0.08); }
+.dark .bg-green-100 { background-color: rgba(34, 197, 94, 0.2); }
+.dark .border-green-200 { border-color: rgba(34, 197, 94, 0.35); }
+.dark .text-green-700, .dark .text-green-800 { color: #86efac; }
+.dark .text-green-600, .dark .text-green-500, .dark .hover\:text-green-600:hover, .dark .group:hover .group-hover\:text-green-600 { color: #4ade80; }
+.dark .bg-yellow-50, .dark .hover\:bg-yellow-50:hover { background-color: rgba(234, 179, 8, 0.12); }
+.dark .bg-yellow-50\/40 { background-color: rgba(234, 179, 8, 0.08); }
+.dark .bg-yellow-100 { background-color: rgba(234, 179, 8, 0.2); }
+.dark .border-yellow-200 { border-color: rgba(234, 179, 8, 0.35); }
+.dark .text-yellow-700, .dark .text-yellow-800 { color: #fde047; }
+.dark .text-yellow-600, .dark .text-yellow-500, .dark .hover\:text-yellow-600:hover, .dark .group:hover .group-hover\:text-yellow-600 { color: #facc15; }
+.dark .bg-amber-50, .dark .hover\:bg-amber-50:hover { background-color: rgba(245, 158, 11, 0.12); }
+.dark .bg-amber-50\/40 { background-color: rgba(245, 158, 11, 0.08); }
+.dark .bg-amber-100 { background-color: rgba(245, 158, 11, 0.2); }
+.dark .border-amber-200 { border-color: rgba(245, 158, 11, 0.35); }
+.dark .text-amber-700, .dark .text-amber-800 { color: #fcd34d; }
+.dark .text-amber-600, .dark .text-amber-500, .dark .hover\:text-amber-600:hover, .dark .group:hover .group-hover\:text-amber-600 { color: #fbbf24; }
+.dark .bg-orange-50, .dark .hover\:bg-orange-50:hover { background-color: rgba(249, 115, 22, 0.12); }
+.dark .bg-orange-50\/40 { background-color: rgba(249, 115, 22, 0.08); }
+.dark .bg-orange-100 { background-color: rgba(249, 115, 22, 0.2); }
+.dark .border-orange-200 { border-color: rgba(249, 115, 22, 0.35); }
+.dark .text-orange-700, .dark .text-orange-800 { color: #fdba74; }
+.dark .text-orange-600, .dark .text-orange-500, .dark .hover\:text-orange-600:hover, .dark .group:hover .group-hover\:text-orange-600 { color: #fb923c; }
+.dark .bg-purple-50, .dark .hover\:bg-purple-50:hover { background-color: rgba(168, 85, 247, 0.12); }
+.dark .bg-purple-50\/40 { background-color: rgba(168, 85, 247, 0.08); }
+.dark .bg-purple-100 { background-color: rgba(168, 85, 247, 0.2); }
+.dark .border-purple-200 { border-color: rgba(168, 85, 247, 0.35); }
+.dark .text-purple-700, .dark .text-purple-800 { color: #d8b4fe; }
+.dark .text-purple-600, .dark .text-purple-500, .dark .hover\:text-purple-600:hover, .dark .group:hover .group-hover\:text-purple-600 { color: #c084fc; }
+.dark .bg-sky-50, .dark .hover\:bg-sky-50:hover { background-color: rgba(14, 165, 233, 0.12); }
+.dark .bg-sky-50\/40 { background-color: rgba(14, 165, 233, 0.08); }
+.dark .bg-sky-100 { background-color: rgba(14, 165, 233, 0.2); }
+.dark .border-sky-200 { border-color: rgba(14, 165, 233, 0.35); }
+.dark .text-sky-700, .dark .text-sky-800 { color: #7dd3fc; }
+.dark .text-sky-600, .dark .text-sky-500, .dark .hover\:text-sky-600:hover, .dark .group:hover .group-hover\:text-sky-600 { color: #38bdf8; }
+.dark .bg-indigo-50, .dark .hover\:bg-indigo-50:hover { background-color: rgba(99, 102, 241, 0.12); }
+.dark .bg-indigo-50\/40 { background-color: rgba(99, 102, 241, 0.08); }
+.dark .bg-indigo-100 { background-color: rgba(99, 102, 241, 0.2); }
+.dark .border-indigo-200 { border-color: rgba(99, 102, 241, 0.35); }
+.dark .text-indigo-700, .dark .text-indigo-800 { color: #a5b4fc; }
+.dark .text-indigo-600, .dark .text-indigo-500, .dark .hover\:text-indigo-600:hover, .dark .group:hover .group-hover\:text-indigo-600 { color: #818cf8; }
