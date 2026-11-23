@@ -1,0 +1,25 @@
+# Render Blueprint — one web service that serves both the API and the React app.
+# Render dashboard → New → Blueprint → pick this repo. You'll be asked for MONGODB_URI.
+services:
+  - type: web
+    name: seo-task-tracker
+    runtime: node
+    plan: starter            # paid instance: always on, no cold starts
+    region: singapore        # pick the region closest to your MongoDB Atlas cluster
+    branch: master
+    autoDeploy: true         # redeploy on every push to master
+    buildCommand: >-
+      npm ci --prefix server &&
+      npm ci --include=dev --prefix client &&
+      npm run build --prefix client
+    startCommand: npm start --prefix server
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: MONGODB_URI
+        sync: false          # entered in the dashboard, never committed
+      - key: JWT_SECRET
+        generateValue: true  # Render generates a strong random secret
+      - key: JWT_EXPIRES_IN
+        value: 7d
