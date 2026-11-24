@@ -1,6 +1,6 @@
 const mongoose = require('mongoose')
 
-// Reused across calls so serverless invocations (Vercel) share one connection
+// Reused across calls so the app keeps a single connection
 let connection = null
 
 async function connectDB(uri) {

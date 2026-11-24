@@ -1,5 +1,5 @@
 // Scheduled reminders, run every REMINDER_INTERVAL_MINUTES (default 15) by the long-running
-// server (src/index.js — not on Vercel, which has no background process).
+// server (src/index.js).
 //   • due_soon  — in-app + email, once per task per due date, when due within 24 h
 //   • overdue   — in-app + email, once per task per due date, when the due date has passed
 //   • digest    — one daily email per person with open overdue / due-soon work, and one team

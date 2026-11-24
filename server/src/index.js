@@ -15,7 +15,7 @@ async function start() {
 
   await connectDB(process.env.MONGODB_URI)
   app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`))
-  // Due-date reminders and daily digests (long-running server only; Vercel has no background jobs)
+  // Due-date reminders and daily digests
   startReminders()
 }
 

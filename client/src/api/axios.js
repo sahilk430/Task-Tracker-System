@@ -2,7 +2,7 @@ import axios from 'axios'
 import { getToken, clearToken } from './token'
 
 // Locally VITE_API_URL is unset and requests go through the Vite proxy.
-// In production (Vercel) it points at the deployed backend URL.
+// In production the API is served from the same origin, so it stays unset too.
 const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '')
 
 const api = axios.create({

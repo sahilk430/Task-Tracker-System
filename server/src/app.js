@@ -8,7 +8,7 @@ const { apiLimiter } = require('./middleware/rateLimit')
 
 const app = express()
 
-// Render / Vercel sit behind one proxy hop — needed for the real client IP in rate limits
+// Render sits behind one proxy hop — needed for the real client IP in rate limits
 app.set('trust proxy', 1)
 
 // Security headers. Images may come from https avatar URLs and blob: previews.
@@ -19,7 +19,7 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }))
 
-// CLIENT_URL may list several origins, comma-separated (e.g. localhost + Vercel)
+// CLIENT_URL may list several origins, comma-separated (e.g. local dev + another host)
 const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
   .split(',')
   .map((url) => url.trim().replace(/\/+$/, ''))
@@ -47,7 +47,6 @@ app.get('/api/health', (req, res) => {
 // Single-service hosting (Render): when the React build exists next to the server,
 // serve it from the same origin. Unknown non-API GETs fall back to index.html so
 // client-side routes (/members/:id, /tasks/:id, …) survive a page refresh.
-// On Vercel the build isn't present, so this block is skipped.
 const clientDist = path.join(__dirname, '../../client/dist')
 const clientIndex = path.join(clientDist, 'index.html')
 if (fs.existsSync(clientIndex)) {
