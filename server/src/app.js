@@ -53,7 +53,7 @@ const clientIndex = path.join(clientDist, 'index.html')
 if (fs.existsSync(clientIndex)) {
   app.use(express.static(clientDist, { index: false, maxAge: '1y', immutable: true }))
   app.use((req, res, next) => {
-    if (req.method !== 'GET' || req.path.startsWith('/api')) return next()
+    if ((req.method !== 'GET' && req.method !== 'HEAD') || req.path.startsWith('/api')) return next()
     res.set('Cache-Control', 'no-cache')
     res.sendFile(clientIndex)
   })
