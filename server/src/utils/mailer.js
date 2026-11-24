@@ -39,7 +39,32 @@ async function sendMail({ to, subject, text }) {
   }
 }
 
+// Admin diagnostics: sends one test email and reports the SMTP error text instead of hiding it.
+// Never includes the password; only which settings are present.
+async function testMail(to) {
+  const settings = {
+    SMTP_HOST: process.env.SMTP_HOST || null,
+    SMTP_PORT: Number(process.env.SMTP_PORT) || 587,
+    SMTP_USER: process.env.SMTP_USER || null,
+    SMTP_PASS: process.env.SMTP_PASS ? `set (${process.env.SMTP_PASS.replace(/\s/g, '').length} chars)` : null,
+    MAIL_FROM: process.env.MAIL_FROM || null,
+  }
+  if (!isMailConfigured()) return { ok: false, settings, error: 'SMTP_HOST is not set' }
+  try {
+    await getTransport().sendMail({
+      from: process.env.MAIL_FROM || process.env.SMTP_USER,
+      to,
+      subject: 'SEO Task Tracker test email',
+      text: 'Email is working. You can ignore this message.',
+    })
+    return { ok: true, settings }
+  } catch (err) {
+    transport = null // rebuild next time, in case settings change
+    return { ok: false, settings, error: err.message }
+  }
+}
+
 // Tests swap in nodemailer's JSON transport to inspect what would be sent
 const setTransport = (t) => { transport = t }
 
-module.exports = { sendMail, isMailConfigured, appUrl, setTransport }
+module.exports = { sendMail, testMail, isMailConfigured, appUrl, setTransport }

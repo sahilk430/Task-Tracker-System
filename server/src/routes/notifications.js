@@ -3,6 +3,9 @@ const { isValidObjectId } = require('mongoose')
 const { Notification } = require('../models')
 const { authenticate } = require('../middleware/auth')
 const { orNotFound } = require('../utils/httpError')
+const { requireRoles } = require('../middleware/roleCheck')
+const { ADMIN_ROLES } = require('../config/constants')
+const { testMail } = require('../utils/mailer')
 
 const router = express.Router()
 const LIMIT = 30
@@ -16,6 +19,14 @@ router.get('/', authenticate, async (req, res) => {
     Notification.countDocuments({ ...mine, read: false }),
   ])
   res.json({ notifications, unread })
+})
+
+// POST /api/notifications/test-email — admin only: sends a test email to yourself and
+// returns the real SMTP error, so email setup can be checked without server logs
+router.post('/test-email', authenticate, requireRoles(...ADMIN_ROLES), async (req, res) => {
+  const { User } = require('../models')
+  const me = await User.findById(req.user.id).select('email')
+  res.json({ to: me?.email, ...(await testMail(me?.email)) })
 })
 
 // POST /api/notifications/read-all
